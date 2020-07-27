@@ -29,6 +29,7 @@ public:
 
     void cal_Rt_se(Matrix<double,6,1> camera_in){
         Matrix<double,3,1> fa = camera_in.head(3);
+        R = skew_matrix(fa).exp();
         double theta = fa.norm();
         Matrix<double, 3, 1> a = fa / theta;
         Matrix3d J = sin(theta) / theta * Matrix3d::Identity() + (1 - sin(theta) / theta) * a * a.transpose() + (1 - cos(theta)) / theta * skew_matrix(a);
