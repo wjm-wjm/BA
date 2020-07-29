@@ -137,10 +137,11 @@ public:
 class LM_SchurOptimization
 {
 public:
-    LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, double lambda, double* parameter_cameras, double* parameter_points){
+    LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points){
         num_iterations_ = num_iterations;
         num_cameras_ = num_cameras;
         num_points_ = num_points;
+        num_camera_parameters_ = num_camera_parameters;
         lambda_ = lambda;
         parameter_cameras_ = parameter_cameras;
         parameter_points_ = parameter_points;
@@ -203,8 +204,54 @@ public:
             MatrixXd delta_parameter_points(3 * num_points_, 1);
             delta_parameter_points = C_inverse * (w - E_T * delta_parameter_cameras);
 
-            for (int j = 0; j < num_cameras_;j++){
+            MatrixXd parameter_cameras_new(6, num_cameras_); //临时储存更新后的fa和t值
+            parameter_cameras_new = MatrixXd::Zero(num_cameras_, 6);
+
+            for (int j = 0; j < num_cameras_; j++)
+            {
                 parameter_se.col(j) += delta_parameter_cameras.block(j * 6, 0, 6, 1);
+                Matrix<double, 3, 1> fa = parameter_se.col(j).block(3, 0, 3, 1);
+                double theta = fa.norm();
+                Matrix<double, 3, 1> a = fa / theta;
+                Matrix3d skew_a;
+                skew_a << 0, -a(2, 0), a(1, 0), a(2, 0), 0, -a(0, 0), -a(1, 0), a(0, 0), 0;
+                Matrix3d J = sin(theta) / theta * Matrix3d::Identity() + (1 - sin(theta) / theta) * a * a.transpose() + (1 - cos(theta)) / theta * skew_a;
+                Matrix<double,3,1> t = J * parameter_se.col(j).block(0, 0, 3, 1);
+                parameter_cameras_new.col(j).block(0, 0, 3, 1) = fa;
+                parameter_cameras_new.col(j).block(3, 0, 3, 1) = t;
+            }
+
+            double error_sum_next = 0;
+            for (int j = 0; j < (int)terms.size();j++){
+                int camera_id = terms[j]->camera_id_;
+                int point_id = terms[j]->point_id_;
+
+                Matrix<double, 6, 1> camera_in = parameter_cameras_new.col(camera_id);
+                Matrix<double, 3, 1> P;
+                for (int k = 0; k < 3;k++){
+                    P(k, 0) = *(parameter_points_ + point_id * 3 + k) + delta_parameter_points(3 * point_id + k, 0);
+                }
+
+                terms[j]->cal_Rt_se(camera_in);
+                Matrix<double, 2, 1> error = terms[j]->call_error(P);
+                error_sum_next += 0.5 * error.squaredNorm();
+            }
+
+            if(error_sum_next < error_sum){
+                for (int j = 0; j < num_cameras_;j++){
+                    for (int k = 0; k < 6;k++){
+                        *(parameter_cameras_ + j * num_camera_parameters_ + k) = parameter_cameras_new(k, j);
+                    }
+                }
+                for (int j = 0; j < num_points_;j++){
+                    for (int k = 0; k < 3;k++){
+                        *(parameter_points_ + 3 * num_points_ + k) += delta_parameter_points(3 * j + k, 0);
+                    }
+                }
+                lambda_ /= 10;
+                error_sum = error_sum_next;
+            }else{
+                lambda_ *= 10;
             }
         }
     }
@@ -214,7 +261,7 @@ public:
         terms.push_back(e);
     }
 
-    int num_iterations_, num_cameras_, num_points_;
+    int num_iterations_, num_cameras_, num_points_, num_camera_parameters_;
     double lambda_;
     double *parameter_cameras_;
     double *parameter_points_;
