@@ -72,7 +72,7 @@ public:
 class ReprojectionError
 {
 public:
-    ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v){
+    ReprojectionError(int camera_id, double fx, double fy, double cx, double cy, double k1, double k2, int point_id, double u, double v){
         camera_id_ = camera_id;
         fx_ = fx;
         fy_ = fy;
@@ -128,7 +128,8 @@ public:
         return EF;
     }
 
-    double camera_id_, fx_, fy_, cx_, cy_, point_id_, u_, v_, k1_, k2_;
+    int camera_id_, point_id_;
+    double fx_, fy_, cx_, cy_, u_, v_, k1_, k2_;
     Matrix<double, 6, 1> se;
     Matrix3d R;
     Matrix<double, 3, 1> t;
@@ -237,6 +238,7 @@ public:
                 error_sum_next += 0.5 * error.squaredNorm();
             }
 
+            //更新参数
             if(error_sum_next < error_sum){
                 for (int j = 0; j < num_cameras_;j++){
                     for (int k = 0; k < 6;k++){
@@ -253,6 +255,8 @@ public:
             }else{
                 lambda_ *= 10;
             }
+
+            cout << "iteration = " << i << ", error = " << error_sum << " , lambda = " << lambda_ << endl;
         }
     }
 
@@ -268,7 +272,43 @@ public:
     vector<ReprojectionError *> terms;
 };
 
-int main()
+int main(int argc, char** argv)
 {
+    if(argc != 2){
+        cout << "error input!" << endl;
+    }
+
+    int num_camera_parameters = 9; //相机参数个数
+    //load_data(int num_camera_parameters)
+    load_data f(num_camera_parameters); //初始化
+
+    if(!f.load_file(argv[1])){
+        cout << "unable to open file!" << endl;
+    }
+
+    //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points)
+    LM_SchurOptimization opt(100, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points());
+    for (int i = 0; i < f.num_observations_;i++){
+        //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
+        double fx = *(f.parameter_cameras() + f.camera_index_[i] * num_camera_parameters + 6);
+        double fy = fx;
+        double cx = 0;
+        double cy = 0;
+        double k1 = *(f.parameter_cameras() + f.camera_index_[i] * num_camera_parameters + 7);
+        double k2 = *(f.parameter_cameras() + f.camera_index_[i] * num_camera_parameters + 8);
+        double u = *(f.observations() + 2 * i);
+        double v = *(f.observations() + 2 * i + 1);
+        ReprojectionError *e = new ReprojectionError(f.camera_index_[i], fx, fy, cx, cy, k1, k2, f.point_index_[i], u ,v);
+    }
+
+    //开始优化
+    opt.optimize();
+
+    FILE* fp = fopen("update.txt", "w");
+    for (int i = 0; i < f.num_parameters_;i++){
+        fprintf(fp, "%.16e\n", *(f.parameters_ + i));
+    }
+    fclose(fp);
+
     return 0;
 }
