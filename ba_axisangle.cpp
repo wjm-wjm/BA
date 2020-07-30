@@ -43,8 +43,8 @@ public:
         parameters_ = new double[num_parameters_];
 
         for (int i = 0; i < num_observations_;i++){
-            fscanf_change(fp, "%d", point_index_ + i);
             fscanf_change(fp, "%d", camera_index_ + i);
+            fscanf_change(fp, "%d", point_index_ + i);
             for (int j = 0; j < 2;j++){
                 fscanf_change(fp, "%lf", observations_ + 2 * i + j);
             }
@@ -205,6 +205,10 @@ public:
             MatrixXd delta_parameter_points(3 * num_points_, 1);
             delta_parameter_points = C_inverse * (w - E_T * delta_parameter_cameras);
 
+            if(delta_parameter_points.norm()+delta_parameter_cameras.norm()<1e-10){
+                break;
+            }
+
             MatrixXd parameter_cameras_new(6, num_cameras_); //临时储存更新后的fa和t值
             parameter_cameras_new = MatrixXd::Zero(num_cameras_, 6);
 
@@ -274,15 +278,15 @@ public:
 
 int main(int argc, char** argv)
 {
-    if(argc != 2){
+    /*if(argc != 2){
         cout << "error input!" << endl;
-    }
+    }*/
 
     int num_camera_parameters = 9; //相机参数个数
     //load_data(int num_camera_parameters)
     load_data f(num_camera_parameters); //初始化
 
-    if(!f.load_file(argv[1])){
+    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/preprocess_problem-16-22106-pre.txt")){
         cout << "unable to open file!" << endl;
     }
 
@@ -290,6 +294,7 @@ int main(int argc, char** argv)
     LM_SchurOptimization opt(100, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points());
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
+        //cout << f.camera_index_[i] << endl;
         double fx = *(f.parameter_cameras() + f.camera_index_[i] * num_camera_parameters + 6);
         double fy = fx;
         double cx = 0;
@@ -299,6 +304,7 @@ int main(int argc, char** argv)
         double u = *(f.observations() + 2 * i);
         double v = *(f.observations() + 2 * i + 1);
         ReprojectionError *e = new ReprojectionError(f.camera_index_[i], fx, fy, cx, cy, k1, k2, f.point_index_[i], u ,v);
+        opt.add_errorterms(e);
     }
 
     //开始优化
