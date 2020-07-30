@@ -97,7 +97,7 @@ public:
         double theta = fa.norm();
         Matrix<double, 3, 1> a = fa / theta;
         Matrix3d J = sin(theta) / theta * Matrix3d::Identity() + (1 - sin(theta) / theta) * a * a.transpose() + (1 - cos(theta)) / theta * skew_matrix(a);
-        t = camera_in.block(0, 3, 3, 1);
+        t = camera_in.block(3, 0, 3, 1);
         Matrix<double,3,1> rou = J.colPivHouseholderQr().solve(t);
         se << rou, fa;
     }
@@ -162,7 +162,7 @@ public:
         v = MatrixXd::Zero(6 * num_cameras_, 1);
         MatrixXd w(3 * num_points_, 1);
         w = MatrixXd::Zero(3 * num_points_, 1);
-        MatrixXd parameter_se(num_cameras_, 6);
+        MatrixXd parameter_se(6, num_cameras_);
         parameter_se = MatrixXd::Zero(6, num_cameras_);
 
         for (int i = 0; i < num_iterations_;i++){
@@ -174,7 +174,7 @@ public:
 
                 Matrix<double, 6, 1> camera_in;
                 for (int k = 0; k < 6;k++){
-                    camera_in(k, 0) = *(parameter_cameras_ + camera_id * 9 + k);
+                    camera_in(k, 0) = *(parameter_cameras_ + camera_id * num_camera_parameters_ + k);
                 }
                 Matrix<double, 3, 1> P;
                 for (int k = 0; k < 3;k++){
@@ -183,34 +183,40 @@ public:
 
                 terms[j]->cal_Rt_se(camera_in); //计算R，t和se
                 parameter_se.col(camera_id) = terms[j]->se; //储存se
-                Matrix<double, 2, 9> EF = terms[j]->cal_FE(P); //计算E，F
-                Matrix<double, 2, 6> F = EF.block(0, 0, 2, 6);
-                Matrix<double, 2, 3> E = EF.block(0, 6, 2, 3);
+                Matrix<double, 2, 9> J_EF = terms[j]->cal_FE(P); //计算E，F
+                Matrix<double, 2, 6> J_F = J_EF.block(0, 0, 2, 6);
+                Matrix<double, 2, 3> J_E = J_EF.block(0, 6, 2, 3);
                 Matrix<double, 2, 1> error = terms[j]->call_error(P); //计算误差（观测值减去预测值）
 
                 error_sum += 0.5 * error.squaredNorm();
 
-                B.block(camera_id * 6, camera_id * 6, 6, 6) += F.transpose() * F + lambda_ * MatrixXd((F.transpose() * F).diagonal().asDiagonal());
-                C.block(point_id * 3, point_id * 3, 3, 3) += E.transpose() * E + lambda_ * MatrixXd((E.transpose() * E).diagonal().asDiagonal());
-                E.block(camera_id * 6, point_id * 3, 6, 3) += F.transpose() * E;
-                E_T.block(point_id * 3, camera_id * 6, 3, 6) += E.transpose() * F;
-                v.block(camera_id * 6, 0, 6, 1) += -F.transpose() * error;
-                w.block(point_id * 3, 0, 3, 1) += -E.transpose() * error;
+                B.block(camera_id * 6, camera_id * 6, 6, 6) += J_F.transpose() * J_F + lambda_ * MatrixXd((J_F.transpose() * J_F).diagonal().asDiagonal());
+                C.block(point_id * 3, point_id * 3, 3, 3) += J_E.transpose() * J_E + lambda_ * MatrixXd((J_E.transpose() * J_E).diagonal().asDiagonal());
+                E.block(camera_id * 6, point_id * 3, 6, 3) += J_F.transpose() * J_E;
+                E_T.block(point_id * 3, camera_id * 6, 3, 6) += J_E.transpose() * J_F;
+                v.block(camera_id * 6, 0, 6, 1) += -J_F.transpose() * error;
+                w.block(point_id * 3, 0, 3, 1) += -J_E.transpose() * error;
+                /*if(j >= 8036){
+                    int s = 1;
+                }*/
             }
 
             MatrixXd C_inverse(3 * num_points_, 3 * num_points_);
-            C_inverse = C.inverse();
+            C_inverse = C.householderQr().solve(MatrixXd::Identity(3 * num_points_, 3 * num_points_));
+            //cout << C_inverse.block(0,10,18,8) << endl;
             MatrixXd delta_parameter_cameras(6 * num_cameras_, 1);
-            delta_parameter_cameras = (B - E * C_inverse * E_T).colPivHouseholderQr().solve(v - E * C_inverse * w);
+            delta_parameter_cameras = (B - E * C_inverse * E_T).householderQr().solve(v - E * C_inverse * w);
+            //cout << delta_parameter_cameras << endl;
             MatrixXd delta_parameter_points(3 * num_points_, 1);
-            delta_parameter_points = C_inverse * (w - E_T * delta_parameter_cameras);
+            //cout << (C_inverse * (w - E_T * delta_parameter_cameras)) << endl;
+            delta_parameter_points = (C_inverse * (w - E_T * delta_parameter_cameras));
 
-            if(delta_parameter_points.norm()+delta_parameter_cameras.norm()<1e-10){
+            if(delta_parameter_points.norm()+delta_parameter_cameras.norm() < 1e-10){
                 break;
             }
 
             MatrixXd parameter_cameras_new(6, num_cameras_); //临时储存更新后的fa和t值
-            parameter_cameras_new = MatrixXd::Zero(num_cameras_, 6);
+            parameter_cameras_new = MatrixXd::Zero(6, num_cameras_);
 
             for (int j = 0; j < num_cameras_; j++)
             {
@@ -251,7 +257,7 @@ public:
                 }
                 for (int j = 0; j < num_points_;j++){
                     for (int k = 0; k < 3;k++){
-                        *(parameter_points_ + 3 * num_points_ + k) += delta_parameter_points(3 * j + k, 0);
+                        *(parameter_points_ + j * 3 + k) += delta_parameter_points(3 * j + k, 0);
                     }
                 }
                 lambda_ /= 10;
@@ -286,7 +292,7 @@ int main(int argc, char** argv)
     //load_data(int num_camera_parameters)
     load_data f(num_camera_parameters); //初始化
 
-    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/preprocess_problem-16-22106-pre.txt")){
+    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/mini_data.txt")){
         cout << "unable to open file!" << endl;
     }
 
@@ -310,7 +316,7 @@ int main(int argc, char** argv)
     //开始优化
     opt.optimize();
 
-    FILE* fp = fopen("update.txt", "w");
+    FILE* fp = fopen("/home/vision/Desktop/code_c_c++/my_BA/update.txt", "w");
     for (int i = 0; i < f.num_parameters_;i++){
         fprintf(fp, "%.16e\n", *(f.parameters_ + i));
     }
