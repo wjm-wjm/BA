@@ -9,7 +9,7 @@
 初步编写完成，还在调试。
 
 日期8.1:
-数据有三种：big_data.txt(cameras:16 points:22106 observations:83718)、mini_data.txt(cameras:16 points:1000 observations:8037)、mini_data_2.txt(cameras:16 points:6 observations:52)。\n
+数据有三种：big_data.txt(cameras:16 points:22106 observations:83718)、mini_data.txt(cameras:16 points:1000 observations:8037)、mini_data_2.txt(cameras:16 points:6 observations:52)。
 gen_raw_data.cpp产生的数据在raw_data文件夹中（将三种数据从原始数据（在original_data文件夹中的problem-16-22106-pre.txt）提取出来）。
 gen_opt_data.cpp产生的数据在opt_data文件夹中（将raw_data文件夹的数据中相机的内参数改为用ceres优化好的）。
 gen_realtrue_data.cpp产生的数据在realtrue_data文件夹中（直接用ceres优化好的全部数据）。
