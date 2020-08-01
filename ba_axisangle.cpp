@@ -188,6 +188,9 @@ public:
         }
 
         FILE *ff = fopen("/home/vision/Desktop/code_c_c++/my_BA/log/log.txt","w");
+        cout << "number of cameras: " << num_cameras_ << " ,number of points: " << num_points_ << " ,number of observations: " << (int)terms.size() << " ,method: " << method_ << endl;
+        fprintf(ff, "number of cameras: %d ,number of points: %d ,number of observations: %d, method: %s\n\n", num_cameras_, num_points_, (int)terms.size(), method_.c_str());
+
         for (int i = 0; i < num_iterations_; i++)
         {
             double error_sum = 0;
@@ -213,6 +216,7 @@ public:
                 Matrix<double, 2, 3> J_E = J_EF.block(0, 6, 2, 3);
                 Matrix<double, 2, 1> error = terms[j]->call_error(P); //计算误差（观测值减去预测值）
 
+                fprintf(ff, "camera id = %d, point id = %d, error_u = %lf, error_v = %lf\n", terms[j]->camera_id_, terms[j]->point_id_, error(0, 0), error(1, 0));
                 error_sum += 0.5 * error.squaredNorm();
 
                 B.block(camera_id * 6, camera_id * 6, 6, 6) += J_F.transpose() * J_F + lambda_ * MatrixXd((J_F.transpose() * J_F).diagonal().asDiagonal());
@@ -284,7 +288,6 @@ public:
                             *(parameter_points_ + j * 3 + k) += delta_parameter_points(j * 3 + k, 0);
                         }
                     }
-                    
                     lambda_ /= 10;
                     //error_sum = error_sum_next;
                 }else{
@@ -306,13 +309,20 @@ public:
                         }
                     }
                 }else{
-                    cout << "iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                    //cout << "iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                    cout << "iteration = " << i << ", final error = " << error_sum << endl;
+                    fprintf(ff, "iteration = %d, final error = %lf\n", i, error_sum);
                     break;
                 }
             }
 
-            cout << "iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
-            fprintf(ff, "iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n", i, error_sum, error_sum_next, lambda_);
+            if(error_sum < error_sum_next){
+                cout << "unsuccessful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                fprintf(ff, "unsuccessful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
+            }else{
+                cout << "successful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                fprintf(ff, "successful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
+            }
         }
         fclose(ff);
     }
@@ -341,12 +351,12 @@ int main(int argc, char** argv)
     //load_data(int num_camera_parameters)
     load_data f(num_camera_parameters); //初始化
 
-    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/realtrue_data/mini_realtrue_data_2.txt")){
+    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/opt_data/mini_data_2.txt")){
         cout << "unable to open file!" << endl;
     }
 
     //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string method)
-    LM_GN_SchurOptimization opt(5000, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "GN");
+    LM_GN_SchurOptimization opt(200, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM");
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
         //cout << f.camera_index_[i] << endl;
