@@ -1,6 +1,7 @@
 #include<iostream>
 #include<random>
 #include<vector>
+#include<string>
 #include<Eigen/Core>
 #include<Eigen/Dense>
 #include<unsupported/Eigen/MatrixFunctions>
@@ -95,17 +96,33 @@ public:
         Matrix<double,3,1> fa = camera_in.head(3);
         R = skew_matrix(fa).exp();
         double theta = fa.norm();
+
+        /*Matrix3d Omega = skew_matrix(fa);
+        if (theta < 0.00001)
+        {
+          //TODO: CHECK WHETHER THIS IS CORRECT!!!
+          R = (Matrix3d::Identity() + Omega + Omega*Omega);
+        }
+        else{
+          Matrix3d Omega2 = Omega*Omega;
+
+          R = (Matrix3d::Identity()
+              + sin(theta)/theta *Omega
+              + (1-cos(theta))/(theta*theta)*Omega2);
+        }*/
+
         Matrix<double, 3, 1> a = fa / theta;
         Matrix3d J = sin(theta) / theta * Matrix3d::Identity() + (1 - sin(theta) / theta) * a * a.transpose() + (1 - cos(theta)) / theta * skew_matrix(a);
         t = camera_in.block(3, 0, 3, 1);
-        Matrix<double,3,1> rou = J.colPivHouseholderQr().solve(t);
+        //Matrix<double,3,1> rou = J.colPivHouseholderQr().solve(t);
+        Matrix<double, 3, 1> rou = J.inverse() * t;
         se << rou, fa;
     }
 
     Matrix<double,2,1> call_error(Matrix<double,3,1> P){
         Matrix<double, 3, 1> P_ = R * P + t;
-        double P_x = P(0, 0) / P(2, 0);
-        double P_y = P(1, 0) / P(2, 0);
+        double P_x = P_(0, 0) / P_(2, 0);
+        double P_y = P_(1, 0) / P_(2, 0);
         double r = P_x * P_x + P_y * P_y;
         double distortion = 1.0 + r * (k1_ + k2_ * r);
         double predicted_u = fx_ * P_x * distortion + cx_;
@@ -135,10 +152,10 @@ public:
     Matrix<double, 3, 1> t;
 };
 
-class LM_SchurOptimization
+class LM_GN_SchurOptimization
 {
 public:
-    LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points){
+    LM_GN_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string method){
         num_iterations_ = num_iterations;
         num_cameras_ = num_cameras;
         num_points_ = num_points;
@@ -146,6 +163,7 @@ public:
         lambda_ = lambda;
         parameter_cameras_ = parameter_cameras;
         parameter_points_ = parameter_points;
+        method_ = method;
     }
 
     void optimize(){
@@ -165,7 +183,13 @@ public:
         MatrixXd parameter_se(6, num_cameras_);
         parameter_se = MatrixXd::Zero(6, num_cameras_);
 
-        for (int i = 0; i < num_iterations_;i++){
+        if(method_ == "GN"){
+            lambda_ = 0;
+        }
+
+        FILE *ff = fopen("/home/vision/Desktop/code_c_c++/my_BA/log/log.txt","w");
+        for (int i = 0; i < num_iterations_; i++)
+        {
             double error_sum = 0;
             for (int j = 0; j < (int)terms.size(); j++)
             {
@@ -183,6 +207,7 @@ public:
 
                 terms[j]->cal_Rt_se(camera_in); //计算R，t和se
                 parameter_se.col(camera_id) = terms[j]->se; //储存se
+                //cout << parameter_se.col(camera_id) << endl << endl;
                 Matrix<double, 2, 9> J_EF = terms[j]->cal_FE(P); //计算E，F
                 Matrix<double, 2, 6> J_F = J_EF.block(0, 0, 2, 6);
                 Matrix<double, 2, 3> J_E = J_EF.block(0, 6, 2, 3);
@@ -196,30 +221,28 @@ public:
                 E_T.block(point_id * 3, camera_id * 6, 3, 6) += J_E.transpose() * J_F;
                 v.block(camera_id * 6, 0, 6, 1) += -J_F.transpose() * error;
                 w.block(point_id * 3, 0, 3, 1) += -J_E.transpose() * error;
-                /*if(j >= 8036){
-                    int s = 1;
-                }*/
             }
 
             MatrixXd C_inverse(3 * num_points_, 3 * num_points_);
-            C_inverse = C.householderQr().solve(MatrixXd::Identity(3 * num_points_, 3 * num_points_));
-            //cout << C_inverse.block(0,10,18,8) << endl;
+            //C_inverse = C.colPivHouseholderQr().solve(MatrixXd::Identity(3 * num_points_, 3 * num_points_));
+            //对C进行分块矩阵再赋值，避免大矩阵求逆
+            for (int j = 0; j < num_points_;j++){
+                C_inverse.block(j * 3, j * 3, 3, 3) = C.block(j * 3, j * 3, 3, 3).inverse();
+            }
+
             MatrixXd delta_parameter_cameras(6 * num_cameras_, 1);
-            delta_parameter_cameras = (B - E * C_inverse * E_T).householderQr().solve(v - E * C_inverse * w);
-            //cout << delta_parameter_cameras << endl;
+            delta_parameter_cameras = (B - E * C_inverse * E_T).colPivHouseholderQr().solve(v - E * C_inverse * w);
             MatrixXd delta_parameter_points(3 * num_points_, 1);
-            //cout << (C_inverse * (w - E_T * delta_parameter_cameras)) << endl;
             delta_parameter_points = (C_inverse * (w - E_T * delta_parameter_cameras));
 
-            if(delta_parameter_points.norm()+delta_parameter_cameras.norm() < 1e-10){
+            if(delta_parameter_points.norm() + delta_parameter_cameras.norm() < 1e-10){
                 break;
             }
 
             MatrixXd parameter_cameras_new(6, num_cameras_); //临时储存更新后的fa和t值
             parameter_cameras_new = MatrixXd::Zero(6, num_cameras_);
 
-            for (int j = 0; j < num_cameras_; j++)
-            {
+            for (int j = 0; j < num_cameras_; j++){
                 parameter_se.col(j) += delta_parameter_cameras.block(j * 6, 0, 6, 1);
                 Matrix<double, 3, 1> fa = parameter_se.col(j).block(3, 0, 3, 1);
                 double theta = fa.norm();
@@ -248,26 +271,50 @@ public:
                 error_sum_next += 0.5 * error.squaredNorm();
             }
 
-            //更新参数
-            if(error_sum_next < error_sum){
-                for (int j = 0; j < num_cameras_;j++){
-                    for (int k = 0; k < 6;k++){
-                        *(parameter_cameras_ + j * num_camera_parameters_ + k) = parameter_cameras_new(k, j);
+            //LM method 更新参数
+            if(method_ == "LM"){
+                if(error_sum_next < error_sum){
+                    for (int j = 0; j < num_cameras_;j++){
+                        for (int k = 0; k < 6;k++){
+                            *(parameter_cameras_ + j * num_camera_parameters_ + k) = parameter_cameras_new(k, j);
+                        }
                     }
-                }
-                for (int j = 0; j < num_points_;j++){
-                    for (int k = 0; k < 3;k++){
-                        *(parameter_points_ + j * 3 + k) += delta_parameter_points(3 * j + k, 0);
+                    for (int j = 0; j < num_points_;j++){
+                        for (int k = 0; k < 3;k++){
+                            *(parameter_points_ + j * 3 + k) += delta_parameter_points(j * 3 + k, 0);
+                        }
                     }
+                    
+                    lambda_ /= 10;
+                    //error_sum = error_sum_next;
+                }else{
+                    lambda_ *= 10;
                 }
-                lambda_ /= 10;
-                error_sum = error_sum_next;
-            }else{
-                lambda_ *= 10;
             }
 
-            cout << "iteration = " << i << ", error = " << error_sum << " , lambda = " << lambda_ << endl;
+            //GN method 更新参数 lambda = 0
+            if(method_ == "GN"){
+                if(error_sum_next < error_sum){
+                    for (int j = 0; j < num_cameras_;j++){
+                        for (int k = 0; k < 6;k++){
+                            *(parameter_cameras_ + j * num_camera_parameters_ + k) = parameter_cameras_new(k, j);
+                        }
+                    }
+                    for (int j = 0; j < num_points_;j++){
+                        for (int k = 0; k < 3;k++){
+                            *(parameter_points_ + j * 3 + k) += delta_parameter_points(3 * j + k, 0);
+                        }
+                    }
+                }else{
+                    cout << "iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                    break;
+                }
+            }
+
+            cout << "iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+            fprintf(ff, "iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n", i, error_sum, error_sum_next, lambda_);
         }
+        fclose(ff);
     }
 
     void add_errorterms(ReprojectionError *e)
@@ -279,6 +326,7 @@ public:
     double lambda_;
     double *parameter_cameras_;
     double *parameter_points_;
+    string method_;
     vector<ReprojectionError *> terms;
 };
 
@@ -288,16 +336,17 @@ int main(int argc, char** argv)
         cout << "error input!" << endl;
     }*/
 
-    int num_camera_parameters = 9; //相机参数个数
+    int num_camera_parameters = 9; //相机参数个数（按照顺序依次：旋转向量、平移向量、相机焦距（fx=fy）、径向畸变系数k1、径向畸变系数k2）
+
     //load_data(int num_camera_parameters)
     load_data f(num_camera_parameters); //初始化
 
-    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/mini_data.txt")){
+    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/realtrue_data/mini_realtrue_data_2.txt")){
         cout << "unable to open file!" << endl;
     }
 
-    //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points)
-    LM_SchurOptimization opt(100, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points());
+    //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string method)
+    LM_GN_SchurOptimization opt(5000, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "GN");
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
         //cout << f.camera_index_[i] << endl;
@@ -316,7 +365,7 @@ int main(int argc, char** argv)
     //开始优化
     opt.optimize();
 
-    FILE* fp = fopen("/home/vision/Desktop/code_c_c++/my_BA/update.txt", "w");
+    FILE* fp = fopen("/home/vision/Desktop/code_c_c++/my_BA/update_parameter/update.txt", "w");
     for (int i = 0; i < f.num_parameters_;i++){
         fprintf(fp, "%.16e\n", *(f.parameters_ + i));
     }
