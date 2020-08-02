@@ -18,6 +18,6 @@ test文件夹中是之前的那个test.cpp（用LM算法拟合曲线y=e^(mx+c)�
 其中gen_opt_data.cpp、gen_realtrue_data.cpp与ceres_ba.cpp需要cmake tool编译（见CMakeLists.txt）。  
 bx_axisangle.cpp可以运行但还在调整。
 
-日期8.2:  　
+日期8.2:  
 ba_axisangle_bigdata.cpp可以跑big_data.txt的数据（通过分块矩阵乘法进行实现的）  
 log文件夹中log_mini_data_8_2.txt已经log_big_data_8_2.txt由于文件过大，我放在谷歌云盘上了（https://drive.google.com/drive/folders/1hTAIIY_rsX1jE9l8h2rGUbwIR6i5Tp7V?usp=sharing）。  　
