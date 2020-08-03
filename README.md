@@ -23,4 +23,4 @@ ba_axisangle_bigdata.cpp可以跑big_data.txt的数据（通过分块矩阵乘�
 log文件夹中log_mini_data_8_2.txt已经log_big_data_8_2.txt由于文件过大，我放在谷歌云盘上了（https://drive.google.com/drive/folders/1hTAIIY_rsX1jE9l8h2rGUbwIR6i5Tp7V?usp=sharing）。 
 
 日期8.3:  
-ba_axisangle.cpp与ba_axisangle_bigdata.cpp可以运行高斯牛顿法，但容易收敛到鞍点（"GN":lambda取大于１的(5、10)，"LM":lambda取小于１(1e-5、1e-4)）。  
+ba_axisangle.cpp与ba_axisangle_bigdata.cpp可以运行高斯牛顿法，但容易收敛到鞍点（"GN":lambda取大于１的(5、10)，"LM":lambda取小于１(1e-5、1e-4)），同时输出增加了initial error、final error以及error change，log文件夹有对应的例子。
