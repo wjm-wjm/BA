@@ -196,7 +196,7 @@ public:
 
         FILE *ff = fopen("/home/vision/Desktop/code_c_c++/my_BA/log/log.txt","w");
         cout << "number of cameras: " << num_cameras_ << " ,number of points: " << num_points_ << " ,number of observations: " << (int)terms.size() << " ,method: " << method_ << " ,initial lambda: " << lambda_ << endl;
-        fprintf(ff, "number of cameras: %d ,number of points: %d ,number of observations: %d, method: %s\n\n", num_cameras_, num_points_, (int)terms.size(), method_.c_str());
+        fprintf(ff, "number of cameras: %d ,number of points: %d ,number of observations: %d, method: %s, initial lambda: %lf\n\n", num_cameras_, num_points_, (int)terms.size(), method_.c_str(), lambda_);
 
         for (int i = 0; i < num_iterations_; i++){
             double error_sum = 0;
@@ -392,7 +392,7 @@ int main(int argc, char** argv)
     }
 
     //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string method)
-    LM_GN_SchurOptimization opt(50, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM"); //"GN":lambda取大于１的(5、10)，"LM":lambda取小于１(1e-5、1e-4)
+    LM_GN_SchurOptimization opt(200, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM"); //"GN":lambda取大于１的(5、10)，"LM":lambda取小于１(1e-5、1e-4)
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
         //cout << f.camera_index_[i] << endl;
