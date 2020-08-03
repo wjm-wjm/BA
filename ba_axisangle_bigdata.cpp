@@ -190,16 +190,15 @@ public:
         MatrixXd parameter_se(6, num_cameras_);
         parameter_se = MatrixXd::Zero(6, num_cameras_);
 
-        if(method_ == "GN"){
-            lambda_ = 0;
-        }
+        /*if(method_ == "GN"){
+            lambda_ = 10;
+        }*/
 
         FILE *ff = fopen("/home/vision/Desktop/code_c_c++/my_BA/log/log.txt","w");
-        cout << "number of cameras: " << num_cameras_ << " ,number of points: " << num_points_ << " ,number of observations: " << (int)terms.size() << " ,method: " << method_ << endl;
+        cout << "number of cameras: " << num_cameras_ << " ,number of points: " << num_points_ << " ,number of observations: " << (int)terms.size() << " ,method: " << method_ << " ,initial lambda: " << lambda_ << endl;
         fprintf(ff, "number of cameras: %d ,number of points: %d ,number of observations: %d, method: %s\n\n", num_cameras_, num_points_, (int)terms.size(), method_.c_str());
 
-        for (int i = 0; i < num_iterations_; i++)
-        {
+        for (int i = 0; i < num_iterations_; i++){
             double error_sum = 0;
             for (int j = 0; j < (int)terms.size(); j++){
                 int camera_id = terms[j]->camera_id_;
@@ -229,12 +228,25 @@ public:
                 Matrix<double, 3, 3> J_ETJ_E = J_E.transpose() * J_E;
                 Matrix<double, 3, 3> D_ETE_D = MatrixXd(J_ETJ_E.diagonal().asDiagonal());
 
-                B.block(camera_id * 6, camera_id * 6, 6, 6) += J_FTJ_F + lambda_ * D_FTF_D;
-                C[point_id] += J_ETJ_E + lambda_ * D_ETE_D;
+                if(method_ == "LM"){
+                    B.block(camera_id * 6, camera_id * 6, 6, 6) += J_FTJ_F + lambda_ * D_FTF_D;
+                    C[point_id] += J_ETJ_E + lambda_ * D_ETE_D;
+                }
+
+                if(method_ == "GN"){
+                    B.block(camera_id * 6, camera_id * 6, 6, 6) += lambda_ * J_FTJ_F;
+                    C[point_id] += lambda_ * J_ETJ_E;
+                }
+                
                 E[point_id].block(camera_id * 6, 0, 6, 3) += J_F.transpose() * J_E;
                 E_T[point_id].block(0, camera_id * 6, 3, 6) += J_E.transpose() * J_F;
                 v.block(camera_id * 6, 0, 6, 1) += -J_F.transpose() * error;
                 w.block(point_id * 3, 0, 3, 1) += -J_E.transpose() * error;
+            }
+
+            if(i == 0){
+                initial_error = error_sum;
+                final_error = error_sum;
             }
 
             //计算delta_parameter_cameras
@@ -311,6 +323,7 @@ public:
                             *(parameter_points_ + j * 3 + k) += delta_parameter_points(j * 3 + k, 0);
                         }
                     }
+                    final_error = error_sum_next;
                     lambda_ /= 10;
                     cout << "successful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
                     fprintf(ff, "successful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
@@ -334,15 +347,19 @@ public:
                             *(parameter_points_ + j * 3 + k) += delta_parameter_points(3 * j + k, 0);
                         }
                     }
+                    final_error = error_sum_next;
+                    lambda_ /= 10;
                     cout << "successful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
                     fprintf(ff, "successful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
                 }else{
-                    cout << "iteration = " << i << ", final error = " << error_sum << endl;
-                    fprintf(ff, "iteration = %d, final error = %lf\n", i, error_sum);
-                    break;
+                    lambda_ *= 10;
+                    cout << "unsuccessful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                    fprintf(ff, "unsuccessful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
                 }
             }
         }
+        cout << "initial error = " << initial_error << " ,final error = " << final_error << " ,error change = " << initial_error - final_error << endl;
+        fprintf(ff, "initial error = %lf, final error = %lf, error change = %lf\n", initial_error, final_error, initial_error - final_error);
         fclose(ff);
     }
 
@@ -352,7 +369,7 @@ public:
     }
 
     int num_iterations_, num_cameras_, num_points_, num_camera_parameters_;
-    double lambda_;
+    double lambda_, initial_error = 0, final_error = 0;
     double *parameter_cameras_;
     double *parameter_points_;
     string method_;
@@ -370,12 +387,12 @@ int main(int argc, char** argv)
     //load_data(int num_camera_parameters)
     load_data f(num_camera_parameters); //初始化
 
-    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/opt_data/big_data.txt")){
+    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/opt_data/mini_data_2.txt")){
         cout << "unable to open file!" << endl;
     }
 
     //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string method)
-    LM_GN_SchurOptimization opt(50, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM");
+    LM_GN_SchurOptimization opt(50, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM"); //"GN":lambda取大于１的(5、10)，"LM":lambda取小于１(1e-5、1e-4)
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
         //cout << f.camera_index_[i] << endl;

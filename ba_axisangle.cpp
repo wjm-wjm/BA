@@ -2,6 +2,7 @@
 #include<random>
 #include<vector>
 #include<string>
+#include<cmath>
 #include<Eigen/Core>
 #include<Eigen/Dense>
 #include<unsupported/Eigen/MatrixFunctions>
@@ -183,16 +184,15 @@ public:
         MatrixXd parameter_se(6, num_cameras_);
         parameter_se = MatrixXd::Zero(6, num_cameras_);
 
-        if(method_ == "GN"){
+        /*if(method_ == "GN"){
             lambda_ = 0;
-        }
+        }*/
 
         FILE *ff = fopen("/home/vision/Desktop/code_c_c++/my_BA/log/log.txt","w");
-        cout << "number of cameras: " << num_cameras_ << " ,number of points: " << num_points_ << " ,number of observations: " << (int)terms.size() << " ,method: " << method_ << endl;
+        cout << "number of cameras: " << num_cameras_ << " ,number of points: " << num_points_ << " ,number of observations: " << (int)terms.size() << " ,method: " << method_ << " ,initial lambda: " << lambda_ << endl;
         fprintf(ff, "number of cameras: %d ,number of points: %d ,number of observations: %d, method: %s\n\n", num_cameras_, num_points_, (int)terms.size(), method_.c_str());
 
-        for (int i = 0; i < num_iterations_; i++)
-        {
+        for (int i = 0; i < num_iterations_; i++){
             double error_sum = 0;
             for (int j = 0; j < (int)terms.size(); j++)
             {
@@ -219,12 +219,30 @@ public:
                 fprintf(ff, "camera id = %d, point id = %d, error_u = %lf, error_v = %lf\n", terms[j]->camera_id_, terms[j]->point_id_, error(0, 0), error(1, 0));
                 error_sum += 0.5 * error.squaredNorm();
 
-                B.block(camera_id * 6, camera_id * 6, 6, 6) += J_F.transpose() * J_F + lambda_ * MatrixXd((J_F.transpose() * J_F).diagonal().asDiagonal());
-                C.block(point_id * 3, point_id * 3, 3, 3) += J_E.transpose() * J_E + lambda_ * MatrixXd((J_E.transpose() * J_E).diagonal().asDiagonal());
+                Matrix<double, 6, 6> J_FTJ_F = J_F.transpose() * J_F;
+                Matrix<double, 6, 6> D_FTF_D = MatrixXd(J_FTJ_F.diagonal().asDiagonal());
+                Matrix<double, 3, 3> J_ETJ_E = J_E.transpose() * J_E;
+                Matrix<double, 3, 3> D_ETE_D = MatrixXd(J_ETJ_E.diagonal().asDiagonal());
+
+                if(method_ == "LM"){
+                    B.block(camera_id * 6, camera_id * 6, 6, 6) += J_FTJ_F + lambda_ * D_FTF_D;
+                    C.block(point_id * 3, point_id * 3, 3, 3) += J_ETJ_E + lambda_ * D_ETE_D;
+                }
+
+                if(method_ == "GN"){
+                    B.block(camera_id * 6, camera_id * 6, 6, 6) += lambda_ * J_FTJ_F;
+                    C.block(point_id * 3, point_id * 3, 3, 3) += lambda_ * J_ETJ_E;
+                }
+                
                 E.block(camera_id * 6, point_id * 3, 6, 3) += J_F.transpose() * J_E;
                 E_T.block(point_id * 3, camera_id * 6, 3, 6) += J_E.transpose() * J_F;
                 v.block(camera_id * 6, 0, 6, 1) += -J_F.transpose() * error;
                 w.block(point_id * 3, 0, 3, 1) += -J_E.transpose() * error;
+            }
+
+            if(i == 0){
+                initial_error = error_sum;
+                final_error = error_sum;
             }
 
             MatrixXd C_inverse(3 * num_points_, 3 * num_points_);
@@ -240,6 +258,7 @@ public:
             delta_parameter_points = (C_inverse * (w - E_T * delta_parameter_cameras));
 
             if(delta_parameter_points.norm() + delta_parameter_cameras.norm() < 1e-10){
+                final_error = error_sum;
                 break;
             }
 
@@ -275,7 +294,7 @@ public:
                 error_sum_next += 0.5 * error.squaredNorm();
             }
 
-            //LM method 更新参数
+            //LM method 更新参数 lambda_ < 1
             if(method_ == "LM"){
                 if(error_sum_next < error_sum){
                     for (int j = 0; j < num_cameras_;j++){
@@ -288,14 +307,18 @@ public:
                             *(parameter_points_ + j * 3 + k) += delta_parameter_points(j * 3 + k, 0);
                         }
                     }
+                    final_error = error_sum_next;
                     lambda_ /= 10;
-                    //error_sum = error_sum_next;
+                    cout << "successful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                    fprintf(ff, "successful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
                 }else{
                     lambda_ *= 10;
+                    cout << "unsuccessful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                    fprintf(ff, "unsuccessful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
                 }
             }
 
-            //GN method 更新参数 lambda = 0
+            //GN method 更新参数 lambda_ > 1
             if(method_ == "GN"){
                 if(error_sum_next < error_sum){
                     for (int j = 0; j < num_cameras_;j++){
@@ -308,22 +331,19 @@ public:
                             *(parameter_points_ + j * 3 + k) += delta_parameter_points(3 * j + k, 0);
                         }
                     }
+                    final_error = error_sum_next;
+                    lambda_ /= 10;
+                    cout << "successful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                    fprintf(ff, "successful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
                 }else{
-                    //cout << "iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
-                    cout << "iteration = " << i << ", final error = " << error_sum << endl;
-                    fprintf(ff, "iteration = %d, final error = %lf\n", i, error_sum);
-                    break;
+                    lambda_ *= 10;
+                    cout << "unsuccessful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
+                    fprintf(ff, "unsuccessful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
                 }
             }
-
-            if(error_sum < error_sum_next){
-                cout << "unsuccessful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
-                fprintf(ff, "unsuccessful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
-            }else{
-                cout << "successful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << endl;
-                fprintf(ff, "successful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf\n\n", i, error_sum, error_sum_next, lambda_);
-            }
         }
+        cout << "initial error = " << initial_error << " ,final error = " << final_error << " ,error change = " << initial_error - final_error << endl;
+        fprintf(ff, "initial error = %lf, final error = %lf, error change = %lf\n", initial_error, final_error, initial_error - final_error);
         fclose(ff);
     }
 
@@ -333,7 +353,7 @@ public:
     }
 
     int num_iterations_, num_cameras_, num_points_, num_camera_parameters_;
-    double lambda_;
+    double lambda_, initial_error = 0, final_error = 0;
     double *parameter_cameras_;
     double *parameter_points_;
     string method_;
@@ -356,7 +376,7 @@ int main(int argc, char** argv)
     }
 
     //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string method)
-    LM_GN_SchurOptimization opt(200, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM");
+    LM_GN_SchurOptimization opt(200, f.num_cameras_, f.num_points_, num_camera_parameters, 5, f.parameter_cameras(), f.parameter_points(), "GN"); //"GN":lambda取大于１的(5、10)，"LM":lambda取小于１(1e-5、1e-4)
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
         //cout << f.camera_index_[i] << endl;
