@@ -20,4 +20,7 @@ bx_axisangle.cpp可以运行但还在调整。
 
 日期8.2:  
 ba_axisangle_bigdata.cpp可以跑big_data.txt的数据（通过分块矩阵乘法进行实现的）  
-log文件夹中log_mini_data_8_2.txt已经log_big_data_8_2.txt由于文件过大，我放在谷歌云盘上了（https://drive.google.com/drive/folders/1hTAIIY_rsX1jE9l8h2rGUbwIR6i5Tp7V?usp=sharing）。  　
+log文件夹中log_mini_data_8_2.txt已经log_big_data_8_2.txt由于文件过大，我放在谷歌云盘上了（https://drive.google.com/drive/folders/1hTAIIY_rsX1jE9l8h2rGUbwIR6i5Tp7V?usp=sharing）。 
+
+日期8.3:  
+ba_axisangle.cpp与ba_axisangle_bigdata.cpp可以运行高斯牛顿法，但容易收敛到鞍点（"GN":lambda取大于１的(5、10)，"LM":lambda取小于１(1e-5、1e-4)）。  
