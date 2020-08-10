@@ -28,7 +28,8 @@ ba_axisangle.cpp与ba_axisangle_bigdata.cpp可以运行高斯牛顿法，但好�
 日期8.10:  
 ba_axisangle_bigdata_.cpp 解决了一些以前没注意到的问题:  
 1. 将真实的2d观测先进行了undistort处理（采用牛顿法进行迭代），这样后面计算Jacobian矩阵时会比较方便一点，不用考虑distortion对Jacobian矩阵的影响（之前一直没注意到distortion会对Jacobian矩阵产生影响，于是只对预测得到的2d观测做了distort处理）。  
-2. 之前将增量方程得到的相机位姿的增量直接加到se(3)上，后来发现对相机位姿se(3)的Jacobian矩阵是扰动模型的形式不能直接加，要对增量与原始的se(3)先做exp变换再左乘，再log变换回来，对此我一开始采用了sophus库，后来参照T.Barfoot,"State estimation for robotics: A matrix lie group approach," 2016中的7.76(b)、7.86(b)、7.95(b)的公式自己实现了一下，和sophus相比略微有些小误差（可能是精度问题）。
+2. 之前将增量方程得到的相机位姿的增量直接加到se(3)上，后来发现对相机位姿se(3)的Jacobian矩阵是扰动模型的形式不能直接加，要对增量与原始的se(3)先做exp变换再左乘，再log变换回来，对此我一开始采用了sophus库，后来参照T.Barfoot,"State estimation for robotics: A matrix lie group approach," 2016中的7.76(b)、7.86(b)、7.95(b)的公式自己实现了一下，和sophus相比略微有些小误差（可能是精度问题）。  
+![图1](https://github.com/wjm-wjm/BA/blob/master/image/2020-08-10%2023-11-03%20%E7%9A%84%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE.png)
 3. 最后测试big_data.txt（也就是Ceres example中的problem-16-22106-pre.txt）最终的平均重投影误差为438280/83718=5.235194343，Ceres example的simple_bundle_adjuster的平均重投影误差为18033.92/83718=0.215412695，误差还是有点大。
 4. 然后我还编写了了PCG-J以及PCG-SSOR算法，还在调试。
 
