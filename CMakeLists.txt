@@ -20,6 +20,7 @@ add_executable( ceres_ba ceres_ba.cpp )
 add_executable( undistort_newton undistort_newton.cpp )
 add_executable( AngleAxisRotatePoint_byhand AngleAxisRotatePoint_byhand.cpp )
 add_executable( se3_exp_log_byhand se3_exp_log_byhand.cpp )
+add_executable( ba_axisangle_bigdata_ ba_axisangle_bigdata_.cpp )
 
 target_link_libraries( gen_opt_data ${CERES_LIBRARIES} )
 target_link_libraries( gen_realtrue_data ${CERES_LIBRARIES} )
