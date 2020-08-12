@@ -36,3 +36,9 @@ ba_axisangle_bigdata_.cpp 解决了一些以前没注意到的问题:
 ![图4](https://github.com/wjm-wjm/BA/blob/master/image/2020-08-11%2014-03-24%20%E7%9A%84%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE.png)  
 4. 然后我还编写了了PCG-J以及PCG-SSOR算法，还在调试。
 
+日期8.12:  
+找到了error降不下来的问题了，我之前每次迭代的时候忘记给所有的储存数据的矩阵更新初值了，导致只有第一次优化是正确的，后面就优化不下去了。下面是改进的结果（好很多）:  
+![图5](https://github.com/wjm-wjm/BA/blob/master/image/2020-08-13%2000-11-40%20%E7%9A%84%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE.png)  
+依旧是浅色的点是我的结果(平均重投影误差为19089.3/83718=0.228019064)，深色的点是Ceres的结果(平均重投影误差为18033.92/83718=0.215412695)，从图中可以看出几乎完全重叠，和之前相比墙也变得很平整:  
+![图6](https://github.com/wjm-wjm/BA/blob/master/image/2020-08-13%2000-06-04%20%E7%9A%84%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE.png)  
+![图7](https://github.com/wjm-wjm/BA/blob/master/image/2020-08-13%2000-06-25%20%E7%9A%84%E5%B1%8F%E5%B9%95%E6%88%AA%E5%9B%BE.png)  
