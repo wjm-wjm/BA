@@ -6,9 +6,11 @@
 #include<string>
 #include<cmath>
 #include<ctime>
+
 #include<Eigen/Core>
 #include<Eigen/Dense>
 #include<unsupported/Eigen/MatrixFunctions>
+
 using namespace std;
 using namespace Eigen;
 
@@ -165,7 +167,7 @@ public:
         double predicted_u = fx_ * P_x + cx_;
         double predicted_v = fy_ * P_y + cy_;
         Matrix<double, 2, 1> error;
-        error << undistorted_u_ - predicted_u, undistorted_v_ - predicted_v; //观测值减去预测值
+        error << (undistorted_u_ - predicted_u), (undistorted_v_ - predicted_v); //观测值减去预测值
         return error;
     }
 
@@ -278,42 +280,42 @@ public:
                 max_eigen_value = eigen_values(i, i);
             }
         }
-        //cout << max_eigen_value << endl;
+        cout << max_eigen_value << endl;
         double two_norm = sqrt(max_eigen_value);
         return two_norm;
     }
 
     void optimize(){
-        MatrixXd B(6 * num_cameras_, 6 * num_cameras_);
-        B = MatrixXd::Zero(6 * num_cameras_, 6 * num_cameras_);
-
+        MatrixXd B(6 * num_cameras_, 6 * num_cameras_); //相机参数的Jacobian矩阵
         vector<Matrix3d> C(num_points_); //储存C每个point(3, 3)的子矩阵
         vector<Matrix3d> C_inverse(num_points_); //储存C每个point(3, 3)的逆子矩阵
         vector<MatrixXd> E(num_points_); //储存E列分每个point(6 * num_cameras_, 3)的逆子矩阵
         vector<MatrixXd> E_T(num_points_); //储存E_T行分每个point(3, 6 * num_cameras_)的逆子矩阵
-        //赋初值0矩阵
-        for (int i = 0; i < num_points_;i++){
-            C[i] = Matrix3d::Zero();
-            C_inverse[i] = Matrix3d::Zero();
-            E[i] = MatrixXd::Zero(6 * num_cameras_, 3);
-            E_T[i] = MatrixXd::Zero(3, 6 * num_cameras_);
-        }
-
-        MatrixXd v(6 * num_cameras_, 1);
-        v = MatrixXd::Zero(6 * num_cameras_, 1);
-        MatrixXd w(3 * num_points_, 1);
-        w = MatrixXd::Zero(3 * num_points_, 1);
-        MatrixXd parameter_se(6, num_cameras_);
-        parameter_se = MatrixXd::Zero(6, num_cameras_);
+        MatrixXd v(6 * num_cameras_, 1); //增量方程右边相机部分
+        MatrixXd w(3 * num_points_, 1); //增量方程左边3d观测点部分
+        MatrixXd parameter_se(6, num_cameras_); //储存每个相机内参李代数形式se(3)
 
         FILE *ff = fopen("/home/vision/Desktop/code_c_c++/my_BA/log/log.txt","w");
-        cout << "number of cameras: " << num_cameras_ << " ,number of points: " << num_points_ << " ,number of observations: " << (int)terms.size() << " ,iteration method: " << iter_method_ << " ,initial lambda: " << lambda_ << " ,solve equations method: " << solve_method_ << endl;
-        fprintf(ff, "number of cameras: %d ,number of points: %d ,number of observations: %d, iteration method: %s, initial lambda: %lf, solve equations method: %s\n\n", num_cameras_, num_points_, (int)terms.size(), iter_method_.c_str(), lambda_, solve_method_.c_str());
+        cout << "number of cameras: " << num_cameras_ << " , number of points: " << num_points_ << " , number of observations: " << (int)terms.size() << " , iteration method: " << iter_method_ << " , initial lambda: " << lambda_ << " , solve equations method: " << solve_method_ << endl;
+        fprintf(ff, "number of cameras: %d , number of points: %d , number of observations: %d , iteration method: %s , initial lambda: %lf , solve equations method: %s\n\n", num_cameras_, num_points_, (int)terms.size(), iter_method_.c_str(), lambda_, solve_method_.c_str());
 
         double total_time_consumption = 0;
         for (int i = 0; i < num_iterations_; i++){
             clock_t time_stt = clock(); //计时
+
+            //赋初值0
+            B = MatrixXd::Zero(6 * num_cameras_, 6 * num_cameras_);
+            for (int i = 0; i < num_points_;i++){
+                C[i] = Matrix3d::Zero();
+                C_inverse[i] = Matrix3d::Zero();
+                E[i] = MatrixXd::Zero(6 * num_cameras_, 3);
+                E_T[i] = MatrixXd::Zero(3, 6 * num_cameras_);
+            }
+            v = MatrixXd::Zero(6 * num_cameras_, 1);
+            w = MatrixXd::Zero(3 * num_points_, 1); 
+            parameter_se = MatrixXd::Zero(6, num_cameras_);
             double error_sum = 0;
+
             for (int j = 0; j < (int)terms.size(); j++){
                 int camera_id = terms[j]->camera_id_;
                 int point_id = terms[j]->point_id_;
@@ -335,7 +337,7 @@ public:
                 Matrix<double, 2, 3> J_E = J_EF.block(0, 6, 2, 3);
                 Matrix<double, 2, 1> error = terms[j]->call_error(P); //计算误差（观测值减去预测值）
 
-                fprintf(ff, "camera id = %d, point id = %d, error_u = %lf, error_v = %lf\n", terms[j]->camera_id_, terms[j]->point_id_, error(0, 0), error(1, 0));
+                fprintf(ff, "camera id = %d , point id = %d , error_u = %lf , error_v = %lf\n", terms[j]->camera_id_, terms[j]->point_id_, error(0, 0), error(1, 0));
                 error_sum += 0.5 * error.squaredNorm();
 
                 Matrix<double, 6, 6> J_FTJ_F = J_F.transpose() * J_F;
@@ -377,15 +379,18 @@ public:
 
             MatrixXd delta_parameter_cameras(6 * num_cameras_, 1);
 
+            /*LDL算法*/
             if(solve_method_ == "LDL"){
-                delta_parameter_cameras = (B - E_C_inverse_E_T).ldlt().solve(v - E_C_inverse_w); //LDL算法
+                delta_parameter_cameras = (B - E_C_inverse_E_T).ldlt().solve(v - E_C_inverse_w);
             }
 
+            /*QR算法*/
             if(solve_method_ == "QR"){
-                delta_parameter_cameras = (B - E_C_inverse_E_T).colPivHouseholderQr().solve(v - E_C_inverse_w); //QR算法
+                delta_parameter_cameras = (B - E_C_inverse_E_T).colPivHouseholderQr().solve(v - E_C_inverse_w);
             }
 
-            if(solve_method_ == "CG"){ //共轭梯度算法
+            /*共轭梯度算法*/
+            if(solve_method_ == "CG"){
                 delta_parameter_cameras = MatrixXd::Zero(6 * num_cameras_, 1); //迭代初始值
 
                 MatrixXd r_k(6 * num_cameras_, 1);
@@ -411,7 +416,8 @@ public:
                 cout << "total step = " << step << endl;
             }
 
-            if(solve_method_ == "PCG-J"){ //预处理共轭梯度算法（Jacobi preconditioner）
+            /*预处理共轭梯度算法(Jacobi preconditioner)*/
+            if(solve_method_ == "PCG-J"){
                 delta_parameter_cameras = MatrixXd::Zero(6 * num_cameras_, 1); //迭代初始值
 
                 MatrixXd r_k(6 * num_cameras_, 1);
@@ -430,8 +436,14 @@ public:
                 }
 
                 //计算条件数Cond(A) A = P^(-1) (B - E_C_inverse_E_T) P^(-T)
+                MatrixXd K_inverse(6 * num_cameras_, 6 * num_cameras_);
+                K_inverse = MatrixXd::Zero(6 * num_cameras_, 6 * num_cameras_);
+                for (int j = 0; j < num_cameras_;j++){
+                    K_inverse(j, j) = sqrt(P_inverse(j, j));
+                }
                 MatrixXd A(6 * num_cameras_, 6 * num_cameras_);
-                A = P_inverse * (B - E_C_inverse_E_T) * P_inverse.transpose();
+                //A = P_inverse * (B - E_C_inverse_E_T);
+                A = K_inverse.transpose() * (B - E_C_inverse_E_T) * K_inverse;
                 //double Cond_A = cal_MatrixInfNorm(A.inverse()) * cal_MatrixInfNorm(A); //无穷范数
                 double Cond_A = cal_Matrix2Norm(A.inverse()) * cal_Matrix2Norm(A); //2范数
                 cout << "Original Cond = " << cal_Matrix2Norm((B - E_C_inverse_E_T).inverse()) * cal_Matrix2Norm((B - E_C_inverse_E_T)) << endl;
@@ -462,7 +474,8 @@ public:
                 cout << "total step = " << step << endl;
             }
 
-            if(solve_method_ == "PCG-SSOR"){ //预处理共轭梯度算法(Symmetric Successive Over Relaxation preconditioner)
+            /*预处理共轭梯度算法(Symmetric Successive Over Relaxation preconditioner)*/
+            if(solve_method_ == "PCG-SSOR"){
                 delta_parameter_cameras = MatrixXd::Zero(6 * num_cameras_, 1); //迭代初始值
 
                 MatrixXd r_k(6 * num_cameras_, 1);
@@ -488,15 +501,94 @@ public:
                     }
                 }
 
-                MatrixXd P_inverse(6 * num_cameras_, 6 * num_cameras_);
+                MatrixXd P(6 * num_cameras_, 6 * num_cameras_);
                 double w = 1;
-                P_inverse = (1.0 / sqrt(w * (2 - w))) * (D + w * L) * D_inverse * (D + w * L).transpose();
+                P = (1.0 / sqrt(w * (2 - w))) * (D + w * L) * D_inverse * ((D + w * L).transpose());
+                MatrixXd P_inverse(6 * num_cameras_, 6 * num_cameras_);
+                P_inverse = P.inverse();
 
                 //计算条件数Cond(A) A = P^(-1) (B - E_C_inverse_E_T) P^(-T)
                 MatrixXd A(6 * num_cameras_, 6 * num_cameras_);
-                A = P_inverse * (B - E_C_inverse_E_T) * P_inverse.transpose();
+                A = P_inverse * (B - E_C_inverse_E_T);
                 //double Cond_A = cal_MatrixInfNorm(A.inverse()) * cal_MatrixInfNorm(A); //无穷范数
                 double Cond_A = cal_Matrix2Norm(A.inverse()) * cal_Matrix2Norm(A); //2范数
+                cout << "Original Cond = " << cal_Matrix2Norm((B - E_C_inverse_E_T).inverse()) * cal_Matrix2Norm((B - E_C_inverse_E_T)) << endl;
+                cout << "Cond = " << Cond_A << endl;
+
+                r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
+                y_k = P_inverse * r_k;
+                d_k = -y_k;
+                MatrixXd r_1(6 * num_cameras_, 1);
+                r_1 = r_k;
+
+                int step = 1;
+                while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
+                    step++;
+                    double a_k = (r_k.transpose() * y_k)(0, 0) / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
+                    delta_parameter_cameras += a_k * d_k;
+
+                    MatrixXd r_k_(6 * num_cameras_, 1);
+                    MatrixXd y_k_(6 * num_cameras_, 1);
+                    r_k_ = r_k;
+                    y_k_ = y_k;
+
+                    r_k += a_k * (B - E_C_inverse_E_T) * d_k;
+                    y_k = P_inverse * r_k;
+                    double b_k = (r_k.transpose() * y_k)(0, 0) / (r_k_.transpose() * y_k_)(0, 0);
+                    d_k = -y_k + b_k * d_k;
+                }
+                cout << "total step = " << step << endl;
+            }
+
+            /*预处理共轭梯度算法(Band-Limited Block-Based Preconditioner)*/
+            if(solve_method_.substr(0, 6) == "PCG-BW"){
+                string N_str = solve_method_.substr(7, (int)solve_method_.size() - 7);
+                int N = 0; //(band width) / 2
+                for (int j = (int)N_str.size() - 1; j >= 0; j--){
+                    N += (N_str[(int)N_str.size() - j - 1] - '0') * (int)pow(10.0, double(j));
+                }
+                //cout << "N = " << N << endl;
+
+                delta_parameter_cameras = MatrixXd::Zero(6 * num_cameras_, 1); //迭代初始值
+
+                MatrixXd r_k(6 * num_cameras_, 1);
+                MatrixXd d_k(6 * num_cameras_, 1);
+                MatrixXd y_k(6 * num_cameras_, 1);
+                r_k = MatrixXd::Zero(6 * num_cameras_, 1);
+                d_k = MatrixXd::Zero(6 * num_cameras_, 1);
+                y_k = MatrixXd::Zero(6 * num_cameras_, 1);
+
+                MatrixXd D(6 * num_cameras_, 6 * num_cameras_);
+                D = MatrixXd((B - E_C_inverse_E_T).diagonal().asDiagonal()); //P的对角矩阵
+                MatrixXd L(6 * num_cameras_, 6 * num_cameras_); //L是P的排除对角线的下三角矩阵，P是对称的，P = L^T + L + D
+                L = MatrixXd::Zero(6 * num_cameras_, 6 * num_cameras_);
+                for (int j = 0; j < N;j++){
+                    for (int k = 0; k < j;k++){
+                        L(j, k) = (B - E_C_inverse_E_T)(j, k);
+                    }
+                }
+                for (int j = N; j < num_cameras_;j++){
+                    for (int k = j - N; k < j;k++){
+                        L(j, k) = (B - E_C_inverse_E_T)(j, k);
+                    }
+                }
+
+                MatrixXd P(6 * num_cameras_, 6 * num_cameras_);
+                if(N != 0){
+                    P = L.transpose() + L + D;
+                }else{
+                    P = MatrixXd::Identity(6 * num_cameras_, 6 * num_cameras_);
+                }
+
+                MatrixXd P_inverse(6 * num_cameras_, 6 * num_cameras_);
+                P_inverse = P.inverse();
+
+                //计算条件数Cond(A) A = P^(-1) (B - E_C_inverse_E_T) P^(-T)
+                MatrixXd A(6 * num_cameras_, 6 * num_cameras_);
+                A = P_inverse * (B - E_C_inverse_E_T);
+                //double Cond_A = cal_MatrixInfNorm(A.inverse()) * cal_MatrixInfNorm(A); //无穷范数
+                double Cond_A = cal_Matrix2Norm(A.inverse()) * cal_Matrix2Norm(A); //2范数
+                cout << "Original Cond = " << cal_Matrix2Norm((B - E_C_inverse_E_T).inverse()) * cal_Matrix2Norm((B - E_C_inverse_E_T)) << endl;
                 cout << "Cond = " << Cond_A << endl;
 
                 r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
@@ -536,7 +628,7 @@ public:
                 delta_parameter_points.block(3 * j, 0, 3, 1) = C_inverse[j] * (w - E_T_delta_parameter_cameras).block(3 * j, 0, 3, 1);
             }
 
-            if(delta_parameter_points.norm() + delta_parameter_cameras.norm() < 1e-10){
+            if(delta_parameter_points.norm() + delta_parameter_cameras.norm() < 1e-8){
                 break;
             }
 
@@ -585,13 +677,13 @@ public:
                     final_error = error_sum_next;
                     lambda_ /= 10;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
-                    cout << "successful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
-                    fprintf(ff, "successful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf, time consumption = %lfs\n\n", i, error_sum, error_sum_next, lambda_, 1000 * (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    cout << "successful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
+                    fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, lambda_, 1000 * (clock() - time_stt) / (double)CLOCKS_PER_SEC);
                 }else{
                     lambda_ *= 10;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
-                    cout << "unsuccessful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
-                    fprintf(ff, "unsuccessful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf, time consumption = %lfs\n\n", i, error_sum, error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    cout << "unsuccessful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
+                    fprintf(ff, "unsuccessful step! iteration = %d , error before = %lf , error next = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
                 }
             }
 
@@ -611,18 +703,18 @@ public:
                     final_error = error_sum_next;
                     lambda_ /= 10;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
-                    cout << "successful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
-                    fprintf(ff, "successful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf, time consumption = %lfs\n\n", i, error_sum, error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    cout << "successful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
+                    fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
                 }else{
                     lambda_ *= 10;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
-                    cout << "unsuccessful step! iteration = " << i << ", error before = " << error_sum << ", error next = " << error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
-                    fprintf(ff, "unsuccessful step! iteration = %d, error before = %lf, error next = %lf, lambda = %lf, time consumption = %lfs\n\n", i, error_sum, error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    cout << "unsuccessful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
+                    fprintf(ff, "unsuccessful step! iteration = %d , error before = %lf , error next = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
                 }
             }
         }
-        cout << "initial error = " << initial_error << " ,final error = " << final_error << " ,error change = " << initial_error - final_error << " ,total time consumption = " << total_time_consumption << "s" << endl;
-        fprintf(ff, "initial error = %lf, final error = %lf, error change = %lf, total time consumption = %lfs\n", initial_error, final_error, initial_error - final_error, total_time_consumption);
+        cout << "initial error = " << initial_error << " , final error = " << final_error << " , error change = " << initial_error - final_error << " , total time consumption = " << total_time_consumption << "s" << endl;
+        fprintf(ff, "initial error = %lf , final error = %lf , error change = %lf , total time consumption = %lfs\n", initial_error, final_error, initial_error - final_error, total_time_consumption);
         fclose(ff);
     }
 
@@ -717,9 +809,20 @@ int main(int argc, char** argv){
     }
 
     //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string iter_method, string solve_method)
-    //iter_method["GN":lambda取大于１的(5、10), "LM":lambda取小于１(1e-5、1e-4))]    
-    //solve_method["LDL":LDL分解算法, "QR":QR分解算法, "CG":共轭梯度算法, "PCG-J":预处理共轭梯度算法(Jacobi preconditioner), "PCG-SSOR":预处理共轭梯度算法(Symmetric Successive Over Relaxation preconditioner)]
-    LM_GN_SchurOptimization opt(50, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM", "PCG-J"); 
+
+    // iter_method:
+    // "GN":lambda取1("LDL":迭代次数1000)
+    // "LM":lambda取1e-4("LDL":迭代次数20)
+
+    // solve_method:
+    // "LDL":LDL分解算法 
+    // "QR":QR分解算法
+    // "CG":共轭梯度算法
+    // "PCG-J":预处理共轭梯度算法(Jacobi preconditioner)
+    // "PCG-SSOR":预处理共轭梯度算法(Symmetric Successive Over Relaxation preconditioner)
+    // "PCG-BW-N":预处理共轭梯度算法(Band-Limited Block-Based Preconditioner), 2 * N = band width
+    LM_GN_SchurOptimization opt(20, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM", "PCG-J");
+
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
         double fx = *(f.parameter_cameras() + f.camera_index_[i] * num_camera_parameters + 6);
