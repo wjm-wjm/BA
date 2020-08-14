@@ -300,6 +300,8 @@ public:
         cout << "number of cameras: " << num_cameras_ << " , number of points: " << num_points_ << " , number of observations: " << (int)terms.size() << " , iteration method: " << iter_method_ << " , initial lambda: " << lambda_ << " , solve equations method: " << solve_method_ << endl;
         fprintf(ff, "number of cameras: %d , number of points: %d , number of observations: %d , iteration method: %s , initial lambda: %lf , solve equations method: %s\n\n", num_cameras_, num_points_, (int)terms.size(), iter_method_.c_str(), lambda_, solve_method_.c_str());
 
+        FILE *fff = fopen("/home/vision/Desktop/code_c_c++/my_BA/GN_data.txt","w");
+
         double total_time_consumption = 0;
         int total_iterations = 0;
         int successful_iterations = 0;
@@ -309,11 +311,11 @@ public:
 
             //赋初值0
             B = MatrixXd::Zero(6 * num_cameras_, 6 * num_cameras_);
-            for (int i = 0; i < num_points_;i++){
-                C[i] = Matrix3d::Zero();
-                C_inverse[i] = Matrix3d::Zero();
-                E[i] = MatrixXd::Zero(6 * num_cameras_, 3);
-                E_T[i] = MatrixXd::Zero(3, 6 * num_cameras_);
+            for (int j = 0; j < num_points_;j++){
+                C[j] = Matrix3d::Zero();
+                C_inverse[j] = Matrix3d::Zero();
+                E[j] = MatrixXd::Zero(6 * num_cameras_, 3);
+                E_T[j] = MatrixXd::Zero(3, 6 * num_cameras_);
             }
             v = MatrixXd::Zero(6 * num_cameras_, 1);
             w = MatrixXd::Zero(3 * num_points_, 1); 
@@ -354,6 +356,16 @@ public:
                     C[point_id] += J_ETJ_E + lambda_ * D_ETE_D;
                 }
 
+                if(iter_method_ == "LM_TR"){
+                    if(i == 0 && flag == true){
+                        B.block(camera_id * 6, camera_id * 6, 6, 6) += J_FTJ_F;
+                        C[point_id] += J_ETJ_E;
+                    }else{
+                        B.block(camera_id * 6, camera_id * 6, 6, 6) += J_FTJ_F + lambda_ * D_FTF_D;
+                        C[point_id] += J_ETJ_E + lambda_ * D_ETE_D;
+                    }
+                }
+
                 if(iter_method_ == "GN"){
                     B.block(camera_id * 6, camera_id * 6, 6, 6) += lambda_ * J_FTJ_F;
                     C[point_id] += lambda_ * J_ETJ_E;
@@ -368,6 +380,30 @@ public:
             if(i == 0){
                 initial_error = error_sum;
                 final_error = error_sum;
+
+                if(iter_method_ == "LM_TR" && flag == true){
+                    v_ = 2;
+                    maxa_ = B(0, 0);
+                    for (int j = 0; j < num_cameras_; j++){
+                        if(maxa_ < B(j, j)){
+                            maxa_ = B(j, j);
+                        }
+                    }
+
+                    for (int j = 0; j < num_points_;j++){
+                        for (int k = 0; k < 3;k++){
+                            if(maxa_ < C[j](k, k)){
+                                maxa_ = C[j](k, k);
+                            }
+                        }
+                    }
+                    //cout << maxa_ << endl;
+                    lambda_ *= maxa_;
+                    //cout << lambda_ << endl;
+                    i--;
+                    flag = false;
+                    continue;
+                }
             }
 
             //计算delta_parameter_cameras
@@ -708,7 +744,7 @@ public:
                     successful_iterations++;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
                     cout << "successful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , error change = " << error_sum - error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
-                    fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , error change = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, error_sum - error_sum_next, lambda_, 1000 * (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , error change = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, error_sum - error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
                 }else{
                     lambda_ *= 10;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
@@ -717,7 +753,41 @@ public:
                 }
             }
 
-            //GN method 更新参数 lambda = 0
+            //LM_TR method 更新参数
+            if(iter_method_ == "LM_TR"){
+                double h = (delta_parameter_cameras.transpose() * (delta_parameter_cameras * lambda_ + v))(0, 0) + (delta_parameter_points.transpose() * (delta_parameter_points * lambda_ + w))(0, 0);
+                double rou = 2 * (error_sum - error_sum_next) / h; 
+                cout << "rou = " << rou << endl;
+                cout << "1 - pow(2 * rou - 1, 3.0) = " << 1 - pow(2 * rou - 1, 3.0) << endl;
+
+                if(rou > 0){
+                    for (int j = 0; j < num_cameras_;j++){
+                        for (int k = 0; k < 6;k++){
+                            *(parameter_cameras_ + j * num_camera_parameters_ + k) = parameter_cameras_new(k, j);
+                        }
+                    }
+                    for (int j = 0; j < num_points_;j++){
+                        for (int k = 0; k < 3;k++){
+                            *(parameter_points_ + j * 3 + k) += delta_parameter_points(j * 3 + k, 0);
+                        }
+                    }
+                    final_error = error_sum_next;
+                    lambda_ *= max((double)(1.0 / 3.0), (double)(1 - pow(2 * rou - 1, 3.0)));
+                    v_ = 2;
+                    successful_iterations++;
+                    total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
+                    cout << "successful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , error change = " << error_sum - error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
+                    fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , error change = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, error_sum - error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                }else{
+                    lambda_ *= v_;
+                    v_ *= 2;
+                    total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
+                    cout << "unsuccessful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , error change = " << error_sum - error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
+                    fprintf(ff, "unsuccessful step! iteration = %d , error before = %lf , error next = %lf , error change = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, error_sum - error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                }
+            }
+
+            //GN method 更新参数
             if(iter_method_ == "GN"){
                 if(error_sum_next < error_sum){
                     for (int j = 0; j < num_cameras_;j++){
@@ -735,7 +805,8 @@ public:
                     successful_iterations++;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
                     cout << "successful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , error change = " << error_sum - error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
-                    fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , error change = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, error_sum - error_sum_next, lambda_, 1000 * (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , error change = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, error_sum - error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    fprintf(fff, "%lf %lf %lf %lf\n", error_sum, error_sum_next, error_sum - error_sum_next, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
                 }else{
                     lambda_ *= 10;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
@@ -752,6 +823,7 @@ public:
         cout << "initial error = " << initial_error << " , final error = " << final_error << " , successful iterations/total iterations = " << successful_iterations << "/" << total_iterations << " , total error change = " << initial_error - final_error << " , total time consumption = " << total_time_consumption << "s" << endl;
         fprintf(ff, "initial error = %lf , final error = %lf , successful iterations/total iterations = %d/%d , total error change = %lf , total time consumption = %lfs\n", initial_error, final_error, successful_iterations, total_iterations, initial_error - final_error, total_time_consumption);
         fclose(ff);
+        fclose(fff);
     }
 
     void add_errorterms(ReprojectionError *e)
@@ -760,6 +832,7 @@ public:
     }
 
     int num_iterations_, num_cameras_, num_points_, num_camera_parameters_;
+    double v_ = 0, maxa_ = 0; bool flag = true; //LM_TR
     double lambda_, initial_error = 0, final_error = 0;
     double *parameter_cameras_;
     double *parameter_points_;
@@ -840,15 +913,16 @@ int main(int argc, char** argv){
     //load_data(int num_camera_parameters)
     load_data f(num_camera_parameters); //初始化
 
-    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/opt_data/big_data.txt")){
+    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/opt_data/mini_data.txt")){
         cout << "unable to open file!" << endl;
     }
 
     //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string iter_method, string solve_method)
 
     // iter_method:
-    // "GN":lambda取1("LDL":迭代次数1000)
-    // "LM":lambda取1e-4("LDL":迭代次数20)
+    // "GN":lambda取1
+    // "LM":lambda取1e-4
+    // "LM_TR":lambda取1e-14(Trust Region Method)
 
     // solve_method:
     // "LDL":LDL分解算法 
