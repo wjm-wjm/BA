@@ -6,6 +6,7 @@
 #include<string>
 #include<cmath>
 #include<ctime>
+#include<unistd.h>
 
 #include<Eigen/Core>
 #include<Eigen/Dense>
@@ -454,6 +455,7 @@ public:
                     d_k = -r_k + b_k * d_k;
                 }
                 cout << "total step = " << step << endl;
+                total_step += step;
             }
 
             /*预处理共轭梯度算法(Jacobi preconditioner)*/
@@ -516,6 +518,7 @@ public:
                     d_k = -y_k + b_k * d_k;
                 }
                 cout << "total step = " << step << endl;
+                total_step += step;
             }
 
             /*预处理共轭梯度算法(Symmetric Successive Over Relaxation preconditioner)*/
@@ -593,6 +596,7 @@ public:
                     d_k = -y_k + b_k * d_k;
                 }
                 cout << "total step = " << step << endl;
+                total_step += step;
             }
 
             /*预处理共轭梯度算法(Band-Limited Block-Based Preconditioner)*/
@@ -614,17 +618,24 @@ public:
                 y_k = MatrixXd::Zero(6 * num_cameras_, 1);
 
                 MatrixXd D(6 * num_cameras_, 6 * num_cameras_);
-                D = MatrixXd((B - E_C_inverse_E_T).diagonal().asDiagonal()); //P的对角矩阵
-                MatrixXd L(6 * num_cameras_, 6 * num_cameras_); //L是P的排除对角线的下三角矩阵，P是对称的，P = L^T + L + D
+                D = MatrixXd::Zero(6 * num_cameras_, 6 * num_cameras_); //P的对角块矩阵
+                for (int j = 0; j < num_cameras_;j++){
+                    D.block(j * 6, j * 6, 6, 6) = (B - E_C_inverse_E_T).block(j * 6, j * 6, 6, 6);
+                    //D.block(j * 6, j * 6, 6, 6) = MatrixXd((B - E_C_inverse_E_T).block(j * 6, j * 6, 6, 6).diagonal().asDiagonal());
+                }
+
+                MatrixXd L(6 * num_cameras_, 6 * num_cameras_); //L是P的排除对角线块的下三角块矩阵，P是对称的，P = L^T + L + D
                 L = MatrixXd::Zero(6 * num_cameras_, 6 * num_cameras_);
-                for (int j = 0; j < N;j++){
+                for (int j = 0; j < N - 1;j++){
                     for (int k = 0; k < j;k++){
-                        L(j, k) = (B - E_C_inverse_E_T)(j, k);
+                        L.block(j * 6, k * 6, 6, 6) = (B - E_C_inverse_E_T).block(j * 6, k * 6, 6, 6);
+                        //L.block(j * 6, k * 6, 6, 6) = MatrixXd((B - E_C_inverse_E_T).block(j * 6, k * 6, 6, 6).diagonal().asDiagonal());
                     }
                 }
-                for (int j = N; j < num_cameras_;j++){
-                    for (int k = j - N; k < j;k++){
-                        L(j, k) = (B - E_C_inverse_E_T)(j, k);
+                for (int j = N - 1; j < num_cameras_;j++){
+                    for (int k = j - N + 1; k < j;k++){
+                        L.block(j * 6, k * 6, 6, 6) = (B - E_C_inverse_E_T).block(j * 6, k * 6, 6, 6);
+                        //L.block(j * 6, k * 6, 6, 6) = MatrixXd((B - E_C_inverse_E_T).block(j * 6, k * 6, 6, 6).diagonal().asDiagonal());
                     }
                 }
 
@@ -661,6 +672,7 @@ public:
                 MatrixXd r_1(6 * num_cameras_, 1);
                 r_1 = r_k;
 
+                //为了防止r_k^T * d_k > 0，即d_k变为上升方向，同时也为了防止相邻两次迭代的梯度偏离正交性较大，故采用再开始的共轭梯度算法(restart CG)进行迭代
                 int step = 1;
                 while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
                     step++;
@@ -673,11 +685,37 @@ public:
                     y_k_ = y_k;
 
                     r_k += a_k * (B - E_C_inverse_E_T) * d_k;
+
+                    //相邻两次迭代的梯度偏离正交性较大时restart
+                    /*if((r_k.transpose() * y_k_)(0, 0) / r_k.squaredNorm() >= 0.1){
+                        r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
+                        y_k = P_inverse * r_k;
+                        d_k = -y_k;
+                        step--;
+                        continue;
+                    }*/
+
                     y_k = P_inverse * r_k;
                     double b_k = (r_k.transpose() * y_k)(0, 0) / (r_k_.transpose() * y_k_)(0, 0);
                     d_k = -y_k + b_k * d_k;
+
+                    //if r_k^T * d_k > 0, then restart
+                    /*if((d_k.transpose() * y_k)(0, 0) > 0){
+                        r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
+                        y_k = P_inverse * r_k;
+                        d_k = -y_k;
+                        step--;
+                        continue;
+                    }*/
+                    /*if(i == 14){
+                        //cout << d_k.transpose()*y_k << endl;
+                        cout << (r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) << endl;
+                        //cout << (r_k.transpose() * r_k)(0, 0) << endl;
+                        sleep(1);
+                    }*/
                 }
                 cout << "total step = " << step << endl;
+                total_step += step;
             }
 
             //计算delta_parameter_points
@@ -757,8 +795,8 @@ public:
             if(iter_method_ == "LM_TR"){
                 double h = (delta_parameter_cameras.transpose() * (delta_parameter_cameras * lambda_ + v))(0, 0) + (delta_parameter_points.transpose() * (delta_parameter_points * lambda_ + w))(0, 0);
                 double rou = 2 * (error_sum - error_sum_next) / h; 
-                cout << "rou = " << rou << endl;
-                cout << "1 - pow(2 * rou - 1, 3.0) = " << 1 - pow(2 * rou - 1, 3.0) << endl;
+                //cout << "rou = " << rou << endl;
+                //cout << "1 - pow(2 * rou - 1, 3.0) = " << 1 - pow(2 * rou - 1, 3.0) << endl;
 
                 if(rou > 0){
                     for (int j = 0; j < num_cameras_;j++){
@@ -820,8 +858,8 @@ public:
                 break;
             }
         }
-        cout << "initial error = " << initial_error << " , final error = " << final_error << " , successful iterations/total iterations = " << successful_iterations << "/" << total_iterations << " , total error change = " << initial_error - final_error << " , total time consumption = " << total_time_consumption << "s" << endl;
-        fprintf(ff, "initial error = %lf , final error = %lf , successful iterations/total iterations = %d/%d , total error change = %lf , total time consumption = %lfs\n", initial_error, final_error, successful_iterations, total_iterations, initial_error - final_error, total_time_consumption);
+        cout << "initial error = " << initial_error << " , final error = " << final_error << " , successful iterations/total iterations = " << successful_iterations << "/" << total_iterations << " , total error change = " << initial_error - final_error << " , total time consumption = " << total_time_consumption << "s" << " , average steps = " << double(total_step) / double(total_iterations) << endl;
+        fprintf(ff, "initial error = %lf , final error = %lf , successful iterations/total iterations = %d/%d , total error change = %lf , total time consumption = %lfs , average steps = %lf\n", initial_error, final_error, successful_iterations, total_iterations, initial_error - final_error, total_time_consumption, double(total_step) / double(total_iterations));
         fclose(ff);
         fclose(fff);
     }
@@ -833,6 +871,7 @@ public:
 
     int num_iterations_, num_cameras_, num_points_, num_camera_parameters_;
     double v_ = 0, maxa_ = 0; bool flag = true; //LM_TR
+    int total_step = 0; //PCG or CG, average step (total_step / total_iterations)
     double lambda_, initial_error = 0, final_error = 0;
     double *parameter_cameras_;
     double *parameter_points_;
@@ -913,7 +952,7 @@ int main(int argc, char** argv){
     //load_data(int num_camera_parameters)
     load_data f(num_camera_parameters); //初始化
 
-    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/opt_data/mini_data.txt")){
+    if(!f.load_file("/home/vision/Desktop/code_c_c++/my_BA/opt_data/big_data.txt")){
         cout << "unable to open file!" << endl;
     }
 
@@ -921,8 +960,8 @@ int main(int argc, char** argv){
 
     // iter_method:
     // "GN":lambda取1
-    // "LM":lambda取1e-4
-    // "LM_TR":lambda取1e-14(Trust Region Method)
+    // "LM":lambda取1e-3
+    // "LM_TR":lambda取1e-13(Trust Region Method)
 
     // solve_method:
     // "LDL":LDL分解算法 
@@ -930,8 +969,8 @@ int main(int argc, char** argv){
     // "CG":共轭梯度算法
     // "PCG-J":预处理共轭梯度算法(Jacobi preconditioner)
     // "PCG-SSOR":预处理共轭梯度算法(Symmetric Successive Over Relaxation preconditioner)
-    // "PCG-BW-N":预处理共轭梯度算法(Band-Limited Block-Based Preconditioner), 2 * N = band width (N取15)
-    LM_GN_SchurOptimization opt(5000, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-4, f.parameter_cameras(), f.parameter_points(), "LM", "LDL");
+    // "PCG-BW-N":预处理共轭梯度算法(Band-Limited Block-Based Preconditioner), 2 * N = band width (N取0到number of cameras,与LM或LM_TR一起用)
+    LM_GN_SchurOptimization opt(5000, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-3, f.parameter_cameras(), f.parameter_points(), "LM", "PCG-BW-1");
 
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
