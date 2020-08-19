@@ -301,7 +301,8 @@ public:
         cout << "number of cameras: " << num_cameras_ << " , number of points: " << num_points_ << " , number of observations: " << (int)terms.size() << " , iteration method: " << iter_method_ << " , initial lambda: " << lambda_ << " , solve equations method: " << solve_method_ << endl;
         fprintf(ff, "number of cameras: %d , number of points: %d , number of observations: %d , iteration method: %s , initial lambda: %lf , solve equations method: %s\n\n", num_cameras_, num_points_, (int)terms.size(), iter_method_.c_str(), lambda_, solve_method_.c_str());
 
-        FILE *fff = fopen("/home/vision/Desktop/code_c_c++/my_BA/GN_data.txt","w");
+        FILE *fff = fopen("/home/vision/Desktop/code_c_c++/my_BA/result_data/data.txt","w");
+        FILE *ffff = fopen("/home/vision/Desktop/code_c_c++/my_BA/result_data/cond.txt", "w");
 
         double total_time_consumption = 0;
         int total_iterations = 0;
@@ -477,7 +478,7 @@ public:
                     P_inverse(j, j) = 1.0 / P(j, j);
                 }
 
-                /*//计算条件数Cond(A) = ||A^(-1)|| * ||A||，范数这里采用矩阵的无穷范数或者2范数
+                //计算条件数Cond(A) = ||A^(-1)|| * ||A||，范数这里采用矩阵的无穷范数或者2范数
                 //A = K^(-1) (B - E_C_inverse_E_T) K^(-T)
                 //P = K * K^T
                 MatrixXd K_inverse(6 * num_cameras_, 6 * num_cameras_);
@@ -493,7 +494,8 @@ public:
                 double Cond_A = cal_Matrix2Norm(A.inverse()) * cal_Matrix2Norm(A); //2范数
                 cout << "Precondition Cond = " << Cond_A << endl; //预处理后的条件数
                 double Original_Cond = cal_Matrix2Norm((B - E_C_inverse_E_T).inverse()) * cal_Matrix2Norm((B - E_C_inverse_E_T));
-                cout << "Original Cond = " << Original_Cond << endl; //原始的条件数*/
+                cout << "Original Cond = " << Original_Cond << endl; //原始的条件数
+                fprintf(ffff,"%lf %lf\n", Original_Cond, Cond_A);
 
                 r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
                 y_k = P_inverse * r_k;
@@ -554,7 +556,7 @@ public:
                 MatrixXd P_inverse(6 * num_cameras_, 6 * num_cameras_);
                 P_inverse = P.inverse();
 
-                /*//计算条件数Cond(A) = ||A^(-1)|| * ||A||，范数这里采用矩阵的无穷范数或者2范数
+                //计算条件数Cond(A) = ||A^(-1)|| * ||A||，范数这里采用矩阵的无穷范数或者2范数
                 //A = K^(-1) (B - E_C_inverse_E_T) K^(-T)
                 //P = K * K^T
                 MatrixXd K_inverse(6 * num_cameras_, 6 * num_cameras_);
@@ -571,7 +573,8 @@ public:
                 double Cond_A = cal_Matrix2Norm(A.inverse()) * cal_Matrix2Norm(A); //2范数
                 cout << "Precondition Cond = " << Cond_A << endl; //预处理后的条件数
                 double Original_Cond = cal_Matrix2Norm((B - E_C_inverse_E_T).inverse()) * cal_Matrix2Norm((B - E_C_inverse_E_T));
-                cout << "Original Cond = " << Original_Cond << endl; //原始的条件数*/
+                cout << "Original Cond = " << Original_Cond << endl; //原始的条件数
+                fprintf(ffff,"%lf %lf\n", Original_Cond, Cond_A);
 
                 r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
                 y_k = P_inverse * r_k;
@@ -649,7 +652,7 @@ public:
                 MatrixXd P_inverse(6 * num_cameras_, 6 * num_cameras_);
                 P_inverse = P.inverse();
 
-                /*//计算条件数Cond(A) = ||A^(-1)|| * ||A||，范数这里采用矩阵的无穷范数或者2范数
+                //计算条件数Cond(A) = ||A^(-1)|| * ||A||，范数这里采用矩阵的无穷范数或者2范数
                 //A = K^(-1) (B - E_C_inverse_E_T) K^(-T)
                 //P = K * K^T
                 MatrixXd K_inverse(6 * num_cameras_, 6 * num_cameras_);
@@ -664,7 +667,8 @@ public:
                 double Cond_A = cal_Matrix2Norm(A.inverse()) * cal_Matrix2Norm(A); //2范数
                 cout << "Precondition Cond = " << Cond_A << endl; //预处理后的条件数
                 double Original_Cond = cal_Matrix2Norm((B - E_C_inverse_E_T).inverse()) * cal_Matrix2Norm((B - E_C_inverse_E_T));
-                cout << "Original Cond = " << Original_Cond << endl; //原始的条件数*/
+                cout << "Original Cond = " << Original_Cond << endl; //原始的条件数
+                fprintf(ffff,"%lf %lf\n", Original_Cond, Cond_A);
 
                 r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
                 y_k = P_inverse * r_k;
@@ -783,6 +787,7 @@ public:
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
                     cout << "successful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , error change = " << error_sum - error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
                     fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , error change = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, error_sum - error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    fprintf(fff, "%lf %lf %lf %lf\n", error_sum, error_sum_next, error_sum - error_sum_next, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
                 }else{
                     lambda_ *= 10;
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
@@ -816,6 +821,7 @@ public:
                     total_time_consumption += (clock() - time_stt) / (double)CLOCKS_PER_SEC;
                     cout << "successful step! iteration = " << i << " , error before = " << error_sum << " , error next = " << error_sum_next << " , error change = " << error_sum - error_sum_next << " , lambda = " << lambda_ << " , time consumption = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
                     fprintf(ff, "successful step! iteration = %d , error before = %lf , error next = %lf , error change = %lf , lambda = %lf , time consumption = %lfs\n\n", i, error_sum, error_sum_next, error_sum - error_sum_next, lambda_, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
+                    fprintf(fff, "%lf %lf %lf %lf\n", error_sum, error_sum_next, error_sum - error_sum_next, (clock() - time_stt) / (double)CLOCKS_PER_SEC);
                 }else{
                     lambda_ *= v_;
                     v_ *= 2;
@@ -862,6 +868,7 @@ public:
         fprintf(ff, "initial error = %lf , final error = %lf , successful iterations/total iterations = %d/%d , total error change = %lf , total time consumption = %lfs , average steps = %lf\n", initial_error, final_error, successful_iterations, total_iterations, initial_error - final_error, total_time_consumption, double(total_step) / double(total_iterations));
         fclose(ff);
         fclose(fff);
+        fclose(ffff);
     }
 
     void add_errorterms(ReprojectionError *e)
@@ -959,7 +966,7 @@ int main(int argc, char** argv){
     //LM_SchurOptimization(int num_iterations, int num_cameras, int num_points, int num_camera_parameters, double lambda, double* parameter_cameras, double* parameter_points, string iter_method, string solve_method)
 
     // iter_method:
-    // "GN":lambda取1
+    // "GN":lambda取2
     // "LM":lambda取1e-3
     // "LM_TR":lambda取1e-13(Trust Region Method)
 
@@ -970,7 +977,7 @@ int main(int argc, char** argv){
     // "PCG-J":预处理共轭梯度算法(Jacobi preconditioner)
     // "PCG-SSOR":预处理共轭梯度算法(Symmetric Successive Over Relaxation preconditioner)
     // "PCG-BW-N":预处理共轭梯度算法(Band-Limited Block-Based Preconditioner), 2 * N = band width (N取0到number of cameras,与LM或LM_TR一起用)
-    LM_GN_SchurOptimization opt(5000, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-3, f.parameter_cameras(), f.parameter_points(), "LM", "PCG-BW-1");
+    LM_GN_SchurOptimization opt(3000, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-3, f.parameter_cameras(), f.parameter_points(), "LM", "PCG-BW-1");
 
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
