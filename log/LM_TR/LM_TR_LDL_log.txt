@@ -1,0 +1,27 @@
+number of cameras: 16 , number of points: 22106 , number of observations: 83718 , iteration method: LM_TR , initial lambda: 0.000000 , solve equations method: LDL
+
+successful step! iteration = 0 , error before = 45352606.330484 , error next = 355686.194893 , error change = 44996920.135592 , lambda = 0.000860 , time consumption = 0.473899s
+
+successful step! iteration = 1 , error before = 355686.194893 , error next = 86015.451789 , error change = 269670.743103 , lambda = 0.000287 , time consumption = 0.481311s
+
+successful step! iteration = 2 , error before = 86015.451789 , error next = 42824.292230 , error change = 43191.159559 , lambda = 0.000096 , time consumption = 0.483512s
+
+successful step! iteration = 3 , error before = 42824.292230 , error next = 23283.932631 , error change = 19540.359599 , lambda = 0.000032 , time consumption = 0.466491s
+
+successful step! iteration = 4 , error before = 23283.932631 , error next = 19204.251043 , error change = 4079.681588 , lambda = 0.000011 , time consumption = 0.467429s
+
+successful step! iteration = 5 , error before = 19204.251043 , error next = 19090.208839 , error change = 114.042204 , lambda = 0.000004 , time consumption = 0.466218s
+
+successful step! iteration = 6 , error before = 19090.208839 , error next = 19089.348244 , error change = 0.860595 , lambda = 0.000001 , time consumption = 0.471691s
+
+successful step! iteration = 7 , error before = 19089.348244 , error next = 19089.346146 , error change = 0.002098 , lambda = 0.000000 , time consumption = 0.481014s
+
+successful step! iteration = 8 , error before = 19089.346146 , error next = 19089.346145 , error change = 0.000001 , lambda = 0.000000 , time consumption = 0.472263s
+
+unsuccessful step! iteration = 9 , error before = 19089.346145 , error next = 19089.346145 , error change = -0.000000 , lambda = 0.000000 , time consumption = 0.491574s
+
+unsuccessful step! iteration = 10 , error before = 19089.346145 , error next = 19089.346145 , error change = -0.000000 , lambda = 0.000001 , time consumption = 0.467120s
+
+successful step! iteration = 11 , error before = 19089.346145 , error next = 19089.346145 , error change = 0.000000 , lambda = 0.000001 , time consumption = 0.480896s
+
+initial error = 45352606.330484 , final error = 19089.346145 , successful iterations/total iterations = 10/13 , total error change = 45333516.984339 , total time consumption = 5.703077s , average steps = 0.000000

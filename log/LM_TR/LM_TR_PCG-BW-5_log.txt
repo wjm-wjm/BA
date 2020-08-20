@@ -1,0 +1,23 @@
+number of cameras: 16 , number of points: 22106 , number of observations: 83718 , iteration method: LM_TR , initial lambda: 0.000000 , solve equations method: PCG-BW-5
+
+successful step! iteration = 0 , error before = 45352606.330484 , error next = 356184.561029 , error change = 44996421.769455 , lambda = 0.000860 , time consumption = 0.460073s
+
+successful step! iteration = 1 , error before = 356184.561029 , error next = 85989.640798 , error change = 270194.920231 , lambda = 0.000287 , time consumption = 0.463121s
+
+successful step! iteration = 2 , error before = 85989.640798 , error next = 42808.416503 , error change = 43181.224294 , lambda = 0.000096 , time consumption = 0.469079s
+
+successful step! iteration = 3 , error before = 42808.416503 , error next = 23279.738985 , error change = 19528.677519 , lambda = 0.000032 , time consumption = 0.464044s
+
+successful step! iteration = 4 , error before = 23279.738985 , error next = 19204.109998 , error change = 4075.628987 , lambda = 0.000011 , time consumption = 0.465384s
+
+successful step! iteration = 5 , error before = 19204.109998 , error next = 19090.208730 , error change = 113.901268 , lambda = 0.000004 , time consumption = 0.461148s
+
+successful step! iteration = 6 , error before = 19090.208730 , error next = 19089.348243 , error change = 0.860487 , lambda = 0.000001 , time consumption = 0.459587s
+
+successful step! iteration = 7 , error before = 19089.348243 , error next = 19089.346146 , error change = 0.002097 , lambda = 0.000000 , time consumption = 0.460405s
+
+successful step! iteration = 8 , error before = 19089.346146 , error next = 19089.346145 , error change = 0.000001 , lambda = 0.000000 , time consumption = 0.462537s
+
+successful step! iteration = 9 , error before = 19089.346145 , error next = 19089.346145 , error change = 0.000000 , lambda = 0.000000 , time consumption = 0.459925s
+
+initial error = 45352606.330484 , final error = 19089.346145 , successful iterations/total iterations = 10/11 , total error change = 45333516.984339 , total time consumption = 4.625019s , average steps = 31.272727

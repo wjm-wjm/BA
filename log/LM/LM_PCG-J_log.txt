@@ -1,0 +1,17 @@
+number of cameras: 16 , number of points: 22106 , number of observations: 83718 , iteration method: LM , initial lambda: 0.001000 , solve equations method: PCG-J
+
+successful step! iteration = 0 , error before = 45352606.330484 , error next = 337607.454344 , error change = 45014998.876140 , lambda = 0.000100 , time consumption = 0.512882s
+
+successful step! iteration = 1 , error before = 337607.454344 , error next = 105759.514505 , error change = 231847.939839 , lambda = 0.000010 , time consumption = 0.491325s
+
+successful step! iteration = 2 , error before = 105759.514505 , error next = 21111.586727 , error change = 84647.927778 , lambda = 0.000001 , time consumption = 0.483105s
+
+successful step! iteration = 3 , error before = 21111.586727 , error next = 19092.221064 , error change = 2019.365663 , lambda = 0.000000 , time consumption = 0.481686s
+
+successful step! iteration = 4 , error before = 19092.221064 , error next = 19089.346224 , error change = 2.874840 , lambda = 0.000000 , time consumption = 0.486544s
+
+successful step! iteration = 5 , error before = 19089.346224 , error next = 19089.346145 , error change = 0.000079 , lambda = 0.000000 , time consumption = 0.477527s
+
+successful step! iteration = 6 , error before = 19089.346145 , error next = 19089.346145 , error change = 0.000000 , lambda = 0.000000 , time consumption = 0.481539s
+
+initial error = 45352606.330484 , final error = 19089.346145 , successful iterations/total iterations = 7/7 , total error change = 45333516.984339 , total time consumption = 3.414401s , average steps = 98.857143

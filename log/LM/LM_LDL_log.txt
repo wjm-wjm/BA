@@ -1,0 +1,17 @@
+number of cameras: 16 , number of points: 22106 , number of observations: 83718 , iteration method: LM , initial lambda: 0.001000 , solve equations method: LDL
+
+successful step! iteration = 0 , error before = 45352606.330484 , error next = 337336.013595 , error change = 45015270.316889 , lambda = 0.000100 , time consumption = 0.496675s
+
+successful step! iteration = 1 , error before = 337336.013595 , error next = 105917.912268 , error change = 231418.101327 , lambda = 0.000010 , time consumption = 0.468968s
+
+successful step! iteration = 2 , error before = 105917.912268 , error next = 21121.358477 , error change = 84796.553791 , lambda = 0.000001 , time consumption = 0.465124s
+
+successful step! iteration = 3 , error before = 21121.358477 , error next = 19092.262516 , error change = 2029.095961 , lambda = 0.000000 , time consumption = 0.464892s
+
+successful step! iteration = 4 , error before = 19092.262516 , error next = 19089.346226 , error change = 2.916290 , lambda = 0.000000 , time consumption = 0.461047s
+
+successful step! iteration = 5 , error before = 19089.346226 , error next = 19089.346145 , error change = 0.000081 , lambda = 0.000000 , time consumption = 0.466316s
+
+successful step! iteration = 6 , error before = 19089.346145 , error next = 19089.346145 , error change = 0.000000 , lambda = 0.000000 , time consumption = 0.461926s
+
+initial error = 45352606.330484 , final error = 19089.346145 , successful iterations/total iterations = 7/7 , total error change = 45333516.984339 , total time consumption = 3.284728s , average steps = 0.000000
