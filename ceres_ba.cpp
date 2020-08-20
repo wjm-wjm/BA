@@ -244,6 +244,7 @@ int main(int argc, char** argv) {
   ceres::Solver::Options options;
   options.linear_solver_type = ceres::DENSE_SCHUR; //配置增量方程的解法schur
   options.minimizer_progress_to_stdout = true; //输出到cout
+  //options.minimizer_type = ceres::LINE_SEARCH;
 
   ceres::Solver::Summary summary; //优化信息
   ceres::Solve(options, &problem, &summary); //求解
