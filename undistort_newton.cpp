@@ -166,24 +166,25 @@ int main(){
     distorted_new_u_v(0, 0) = fx * x1_y1(0, 0) * distortion + cx;
     distorted_new_u_v(1, 0) = fy * x1_y1(1, 0) * distortion + cy;
     cout << "distorted u v = " << u_v << endl;
+    cout << "My: undistorted u v = " << new_u_v << endl;
     cout << "distort by hand u v = " << distorted_new_u_v << endl;
-    cout << "undistortrd u v = " << new_u_v << endl;
 
     vector<Point2f> undistort_p, distort_p;
     distort_p.push_back(Point2f(u_v(0, 0), u_v(1, 0)));
     double a = distort_p[0].x;
     //cout << a << endl;
     Mat K = (Mat_<double>(3, 3) << fx, 0, cx, 0, fy, cy, 0, 0, 1);
-    cout << K << endl;
+    //cout << K << endl;
     vector<double> D;
     D.push_back(k1);
     D.push_back(k2);
     D.push_back(0);
     D.push_back(0);
     cv::undistortPoints(distort_p, undistort_p, K, D);
+    cout << "OpenCV:undistortPoints undistorted u v = " << endl;
+    cout << fx * undistort_p[0].x + cx << endl;
+    cout << fy * undistort_p[0].y + cy << endl;
     cout << undistort_p << endl;
-    cout << fx * undistort_p[0].x * distortion + cx << endl;
-    cout << fy * undistort_p[0].y * distortion + cy << endl;
 
     return 0;
 }
