@@ -429,14 +429,21 @@ public:
             }*/
             cout << "time2 = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
 
+            //计算EC^(-1)E^(T)以及EC^(-1)w
             for (int j = 0; j < num_points_; j++){
                 C_inverse[j] = C[j].inverse();
                 for (int k1 = 0; k1 < num_cameras_;k1++){
                     E[j].block<6, 3>(6 * k1, 0) *= C_inverse[j];
-                    for (int k2 = 0; k2 < num_cameras_; k2++){
+                    for (int k2 = k1; k2 < num_cameras_; k2++){
                         E_C_inverse_E_T.block<6, 6>(6 * k1, 6 * k2) += E[j].block<6, 3>(6 * k1, 0) * E_T[j].block<3, 6>(0, 6 * k2);
                     }
                     E_C_inverse_w.block<6, 1>(6 * k1, 0) += E[j].block<6, 3>(6 * k1, 0) * w.block<3, 1>(3 * j, 0);
+                }
+            }
+            //因为EC^(-1)E^(T)为对称矩阵，所以上面只计算了上三角部分，下三角部分直接赋值
+            for (int k1 = 0; k1 < num_cameras_;k1++){
+                for (int k2 = 0; k2 < k1;k2++){
+                    E_C_inverse_E_T.block<6, 6>(6 * k1, 6 * k2) = E_C_inverse_E_T.block<6, 6>(6 * k2, 6 * k1).transpose();
                 }
             }
             cout << "time3 = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
