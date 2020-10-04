@@ -307,6 +307,7 @@ public:
         double total_time_consumption = 0;
         int total_iterations = 0;
         int successful_iterations = 0;
+        double total_solve_equation_time = 0;
         for (int i = 0; i < num_iterations_; i++){
             clock_t time_stt = clock(); //计时
             total_iterations++;
@@ -447,6 +448,7 @@ public:
                 }
             }
             cout << "time3 = " << (clock() - time_stt) / (double)CLOCKS_PER_SEC << "s" << endl;
+            double t3 = (clock() - time_stt) / (double)CLOCKS_PER_SEC;
 
             MatrixXd delta_parameter_cameras(6 * num_cameras_, 1);
 
@@ -464,24 +466,31 @@ public:
             if(solve_method_ == "CG"){
                 delta_parameter_cameras.setZero(6 * num_cameras_, 1); //迭代初始值0
 
-                MatrixXd r_k(6 * num_cameras_, 1);
-                MatrixXd d_k(6 * num_cameras_, 1);
-                r_k.setZero(6 * num_cameras_, 1);
-                d_k.setZero(6 * num_cameras_, 1);
+                VectorXd r_k(6 * num_cameras_);
+                VectorXd d_k(6 * num_cameras_);
 
                 r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
                 d_k = -r_k;
-                MatrixXd r_1(6 * num_cameras_, 1);
+                VectorXd r_1(6 * num_cameras_);
                 r_1 = r_k;
 
                 int step = 1;
-                while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
+                /*while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
                     step++;
                     double a_k = (r_k.transpose() * r_k)(0, 0) / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
                     delta_parameter_cameras += a_k * d_k;
                     double r_kTr_k = (r_k.transpose() * r_k)(0, 0);
                     r_k += a_k * (B - E_C_inverse_E_T) * d_k;
                     double b_k = (r_k.transpose() * r_k)(0, 0) / r_kTr_k;
+                    d_k = -r_k + b_k * d_k;
+                }*/
+                while (r_k.squaredNorm() / r_1.squaredNorm() > 1e-8){
+                    step++;
+                    double r_kTr_k = r_k.squaredNorm();
+                    double a_k = r_kTr_k / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
+                    delta_parameter_cameras += a_k * d_k;
+                    r_k += a_k * (B - E_C_inverse_E_T) * d_k;
+                    double b_k = r_k.squaredNorm() / r_kTr_k;
                     d_k = -r_k + b_k * d_k;
                 }
                 cout << "total step = " << step << endl;
@@ -492,13 +501,10 @@ public:
             if(solve_method_ == "PCG-J"){
                 delta_parameter_cameras.setZero(6 * num_cameras_, 1); //迭代初始值0
 
-                MatrixXd r_k(6 * num_cameras_, 1);
-                MatrixXd d_k(6 * num_cameras_, 1);
-                MatrixXd y_k(6 * num_cameras_, 1);
-                r_k.setZero(6 * num_cameras_, 1);
-                d_k.setZero(6 * num_cameras_, 1);
-                y_k.setZero(6 * num_cameras_, 1);
-
+                VectorXd r_k(6 * num_cameras_);
+                VectorXd d_k(6 * num_cameras_);
+                VectorXd y_k(6 * num_cameras_);
+                
                 MatrixXd P(6 * num_cameras_, 6 * num_cameras_);
                 P = MatrixXd((B - E_C_inverse_E_T).diagonal().asDiagonal()); //预处理矩阵P
                 MatrixXd P_inverse(6 * num_cameras_, 6 * num_cameras_);
@@ -529,11 +535,11 @@ public:
                 r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
                 y_k = P_inverse * r_k;
                 d_k = -y_k;
-                MatrixXd r_1(6 * num_cameras_, 1);
+                VectorXd r_1(6 * num_cameras_);
                 r_1 = r_k;
 
                 int step = 1;
-                while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
+                /*while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
                     step++;
                     double a_k = (r_k.transpose() * y_k)(0, 0) / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
                     delta_parameter_cameras += a_k * d_k;
@@ -547,6 +553,16 @@ public:
                     y_k = P_inverse * r_k;
                     double b_k = (r_k.transpose() * y_k)(0, 0) / (r_k_.transpose() * y_k_)(0, 0);
                     d_k = -y_k + b_k * d_k;
+                }*/
+                while (r_k.squaredNorm() / r_1.squaredNorm() > 1e-8){
+                    step++;
+                    double r_ky_k = r_k.dot(y_k);
+                    double a_k = r_ky_k / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
+                    delta_parameter_cameras += a_k * d_k;
+                    r_k += a_k * (B - E_C_inverse_E_T) * d_k;
+                    y_k = P_inverse * r_k;
+                    double b_k = r_k.dot(y_k) / r_ky_k;
+                    d_k = -y_k + b_k * d_k;
                 }
                 cout << "total step = " << step << endl;
                 total_step += step;
@@ -556,12 +572,9 @@ public:
             if(solve_method_ == "PCG-SSOR"){
                 delta_parameter_cameras.setZero(6 * num_cameras_, 1); //迭代初始值0
 
-                MatrixXd r_k(6 * num_cameras_, 1);
-                MatrixXd d_k(6 * num_cameras_, 1);
-                MatrixXd y_k(6 * num_cameras_, 1);
-                r_k.setZero(6 * num_cameras_, 1);
-                d_k.setZero(6 * num_cameras_, 1);
-                y_k.setZero(6 * num_cameras_, 1);
+                VectorXd r_k(6 * num_cameras_);
+                VectorXd d_k(6 * num_cameras_);
+                VectorXd y_k(6 * num_cameras_);
 
                 MatrixXd D(6 * num_cameras_, 6 * num_cameras_);
                 D = MatrixXd((B - E_C_inverse_E_T).diagonal().asDiagonal());
@@ -608,11 +621,11 @@ public:
                 r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
                 y_k = P_inverse * r_k;
                 d_k = -y_k;
-                MatrixXd r_1(6 * num_cameras_, 1);
+                VectorXd r_1(6 * num_cameras_);
                 r_1 = r_k;
 
                 int step = 1;
-                while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
+                /*while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
                     step++;
                     double a_k = (r_k.transpose() * y_k)(0, 0) / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
                     delta_parameter_cameras += a_k * d_k;
@@ -625,6 +638,16 @@ public:
                     r_k += a_k * (B - E_C_inverse_E_T) * d_k;
                     y_k = P_inverse * r_k;
                     double b_k = (r_k.transpose() * y_k)(0, 0) / (r_k_.transpose() * y_k_)(0, 0);
+                    d_k = -y_k + b_k * d_k;
+                }*/
+                while (r_k.squaredNorm() / r_1.squaredNorm() > 1e-8){
+                    step++;
+                    double r_ky_k = r_k.dot(y_k);
+                    double a_k = r_ky_k / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
+                    delta_parameter_cameras += a_k * d_k;
+                    r_k += a_k * (B - E_C_inverse_E_T) * d_k;
+                    y_k = P_inverse * r_k;
+                    double b_k = r_k.dot(y_k) / r_ky_k;
                     d_k = -y_k + b_k * d_k;
                 }
                 cout << "total step = " << step << endl;
@@ -642,12 +665,9 @@ public:
 
                 delta_parameter_cameras.setZero(6 * num_cameras_, 1); //迭代初始值0
 
-                MatrixXd r_k(6 * num_cameras_, 1);
-                MatrixXd d_k(6 * num_cameras_, 1);
-                MatrixXd y_k(6 * num_cameras_, 1);
-                r_k.setZero(6 * num_cameras_, 1);
-                d_k.setZero(6 * num_cameras_, 1);
-                y_k.setZero(6 * num_cameras_, 1);
+                VectorXd r_k(6 * num_cameras_);
+                VectorXd d_k(6 * num_cameras_);
+                VectorXd y_k(6 * num_cameras_);
 
                 MatrixXd D(6 * num_cameras_, 6 * num_cameras_); //P的对角块矩阵D
                 D.setZero(6 * num_cameras_, 6 * num_cameras_);
@@ -699,12 +719,12 @@ public:
                 r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
                 y_k = P_inverse * r_k;
                 d_k = -y_k;
-                MatrixXd r_1(6 * num_cameras_, 1);
+                VectorXd r_1(6 * num_cameras_);
                 r_1 = r_k;
 
                 //为了防止r_k^T * d_k > 0，即d_k变为上升方向，同时也为了防止相邻两次迭代的梯度偏离正交性较大，故采用再开始的共轭梯度算法(restart CG)进行迭代
                 int step = 1;
-                while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
+                /*while ((r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) > 1e-8){
                     step++;
                     double a_k = (r_k.transpose() * y_k)(0, 0) / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
                     delta_parameter_cameras += a_k * d_k;
@@ -717,36 +737,42 @@ public:
                     r_k += a_k * (B - E_C_inverse_E_T) * d_k;
 
                     //相邻两次迭代的梯度偏离正交性较大时restart
-                    /*if((r_k.transpose() * y_k_)(0, 0) / r_k.squaredNorm() >= 0.1){
-                        r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
-                        y_k = P_inverse * r_k;
-                        d_k = -y_k;
-                        step--;
-                        continue;
-                    }*/
+                    //if((r_k.transpose() * y_k_)(0, 0) / r_k.squaredNorm() >= 0.1){
+                    //    r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
+                    //    y_k = P_inverse * r_k;
+                    //    d_k = -y_k;
+                    //    step--;
+                    //    continue;
+                    //}
 
                     y_k = P_inverse * r_k;
                     double b_k = (r_k.transpose() * y_k)(0, 0) / (r_k_.transpose() * y_k_)(0, 0);
                     d_k = -y_k + b_k * d_k;
-
                     //if r_k^T * d_k > 0, then restart
-                    /*if((d_k.transpose() * y_k)(0, 0) > 0){
-                        r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
-                        y_k = P_inverse * r_k;
-                        d_k = -y_k;
-                        step--;
-                        continue;
-                    }*/
-                    /*if(i == 14){
-                        //cout << d_k.transpose()*y_k << endl;
-                        cout << (r_k.transpose() * r_k)(0, 0) / (r_1.transpose() * r_1)(0, 0) << endl;
-                        //cout << (r_k.transpose() * r_k)(0, 0) << endl;
-                        sleep(1);
-                    }*/
+                    //if((d_k.transpose() * y_k)(0, 0) > 0){
+                    //    r_k = (B - E_C_inverse_E_T) * delta_parameter_cameras - (v - E_C_inverse_w);
+                    //    y_k = P_inverse * r_k;
+                    //    d_k = -y_k;
+                    //    step--;
+                    //    continue;
+                    //}
+                }*/
+                while (r_k.squaredNorm() / r_1.squaredNorm() > 1e-8){
+                    step++;
+                    double r_ky_k = r_k.dot(y_k);
+                    double a_k = r_ky_k / (d_k.transpose() * (B - E_C_inverse_E_T) * d_k)(0, 0);
+                    delta_parameter_cameras += a_k * d_k;
+                    r_k += a_k * (B - E_C_inverse_E_T) * d_k;
+                    y_k = P_inverse * r_k;
+                    double b_k = r_k.dot(y_k) / r_ky_k;
+                    d_k = -y_k + b_k * d_k;
                 }
                 cout << "total step = " << step << endl;
                 total_step += step;
             }
+
+            double t4 = (clock() - time_stt) / (double)CLOCKS_PER_SEC;
+            total_solve_equation_time = t4 - t3;
 
             //计算delta_parameter_points
             MatrixXd E_T_delta_parameter_cameras(3 * num_points_, 1);
@@ -903,11 +929,12 @@ public:
                 break;
             }
         }
-        cout << "initial error = " << initial_error << " , final error = " << final_error << " , successful iterations/total iterations = " << successful_iterations << "/" << total_iterations << " , total error change = " << initial_error - final_error << " , total time consumption = " << total_time_consumption << "s" << " , average steps = " << double(total_step) / double(total_iterations) << endl;
+        cout << "initial error = " << initial_error << " , final error = " << final_error << " , successful iterations/total iterations = " << successful_iterations << "/" << total_iterations << " , total error change = " << initial_error - final_error << " , total time consumption = " << total_time_consumption << "s" << " , average steps = " << double(total_step) / double(total_iterations) << " , average solve equation time = " << total_solve_equation_time / (total_iterations - 1) << "s" <<endl;
         //fprintf(ff, "initial error = %lf , final error = %lf , successful iterations/total iterations = %d/%d , total error change = %lf , total time consumption = %lfs , average steps = %lf\n", initial_error, final_error, successful_iterations, total_iterations, initial_error - final_error, total_time_consumption, double(total_step) / double(total_iterations));
         //fclose(ff);
         //fclose(fff);
         //fclose(ffff);
+        cout << total_time_consumption / (total_iterations - 1) << endl;
     }
 
     void add_errorterms(ReprojectionError *e)
@@ -1016,7 +1043,7 @@ int main(int argc, char** argv){
     // "PCG-J":预处理共轭梯度算法(Jacobi preconditioner)
     // "PCG-SSOR":预处理共轭梯度算法(Symmetric Successive Over Relaxation preconditioner)
     // "PCG-BW-N":预处理共轭梯度算法(Band-Limited Block-Based Preconditioner), 2 * N = band width (N取0到number of cameras)
-    LM_GN_SchurOptimization opt(3000, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-3, f.parameter_cameras(), f.parameter_points(), "LM", "LDL");
+    LM_GN_SchurOptimization opt(3000, f.num_cameras_, f.num_points_, num_camera_parameters, 1e-13, f.parameter_cameras(), f.parameter_points(), "LM_TR", "PCG-BW-1");
 
     for (int i = 0; i < f.num_observations_;i++){
         //ReprojectionError(double camera_id, double fx, double fy, double cx, double cy, double k1, double k2, double point_id, double u, double v)
